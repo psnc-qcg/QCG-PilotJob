@@ -210,6 +210,8 @@ class LocalSchemaExecutionJob(ExecutionJob):
             if je.stderr is not None:
                 self.__stderrF = open(os.path.join(self.wdPath, je.stderr), 'w')
 
+            logging.debug("launching process for job {}: {} {}".format(self.job.name, je.exec, str(je.args)))
+
             process = await asyncio.create_subprocess_exec(
                 je.exec, *je.args,
                 stdin=self.__stdinF,
