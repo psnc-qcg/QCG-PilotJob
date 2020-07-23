@@ -78,24 +78,23 @@ class SlurmExecution(ExecutionSchema):
 
         job_model = ex_job.job_execution.model
 
-        # create run configuration
-        if job_model != "threads":
-            run_conf_file = os.path.join(ex_job.wd_path, ".{}.runconfig".format(ex_job.job_iteration.name))
-            with open(run_conf_file, 'w') as conf_f:
-                conf_f.write("0\t%s %s\n" % (
-                    job_exec,
-                    ' '.join('{0}'.format(str(arg).replace(" ", "\\ ")) for arg in job_args)))
-                if ex_job.ncores > 1:
-                    if ex_job.ncores > 2:
-                        conf_f.write("1-%d /bin/true\n" % (ex_job.ncores - 1))
-                    else:
-                        conf_f.write("1 /bin/true\n")
+        core_ids = []
+        if self.resources.binding:
+            for node in ex_job.allocation.nodes:
+                for slot in node.cores:
+                    core_ids.extend(slot.split(','))
 
+        # create run configuration
+        if job_model == "srun":
             if self.resources.binding:
-                core_ids = []
+                cpu_masks = []
                 for node in ex_job.allocation.nodes:
-                    core_ids.extend([str(core) for core in node.cores])
-                cpu_bind = "--cpu-bind=verbose,map_cpu:{}".format(','.join(core_ids))
+                    for slot in node.cores:
+                        cpu_mask = 0
+                        for cpu in slot.split(','):
+                            cpu_mask = cpu_mask | 1 << int(cpu)
+                        cpu_masks.append(hex(cpu_mask))
+                cpu_bind = "--cpu-bind=verbose,mask_cpu:{}".format(','.join(cpu_masks))
             else:
                 cpu_bind = "--cpu-bind=verbose,cores"
 
@@ -103,15 +102,13 @@ class SlurmExecution(ExecutionSchema):
                 "-n", str(ex_job.ncores),
                 "--overcommit",
                 "--mem-per-cpu=0",
-                cpu_bind,
-                "--multi-prog"]
-        else:
-            cpu_mask = 0
-            if self.resources.binding:
-                core_ids = []
-                for node in ex_job.allocation.nodes:
-                    for core in node.cores:
-                        cpu_mask = cpu_mask | 1 << core
+                "-m", "arbitrary",
+                cpu_bind ]
+        elif job_model == "threads":
+            if self.resources.binding and core_ids:
+                cpu_mask = 0
+                for cpu in core_ids:
+                    cpu_mask = cpu_mask | 1 << int(cpu)
                 cpu_bind = "--cpu-bind=verbose,mask_cpu:{}".format(hex(cpu_mask))
             else:
                 cpu_bind = "--cpu-bind=verbose,cores"
@@ -121,6 +118,37 @@ class SlurmExecution(ExecutionSchema):
                 "--cpus-per-task", str(ex_job.ncores),
                 "--overcommit",
                 "--mem-per-cpu=0",
+                cpu_bind]
+        else:
+#            run_conf_file = os.path.join(ex_job.wd_path, ".{}.runconfig".format(ex_job.job_iteration.name))
+#            with open(run_conf_file, 'w') as conf_f:
+#                conf_f.write("0\t%s %s\n" % (
+#                    job_exec,
+#                    ' '.join('{0}'.format(str(arg).replace(" ", "\\ ")) for arg in job_args)))
+#                if ex_job.ncores > 1:
+#                    if ex_job.ncores > 2:
+#                        conf_f.write("1-%d /bin/true\n" % (ex_job.ncores - 1))
+#                    else:
+#                        conf_f.write("1 /bin/true\n")
+
+            if self.resources.binding and core_ids:
+                cpu_mask = 0
+                for cpu in core_ids:
+                    cpu_mask = cpu_mask | 1 << int(cpu)
+                cpu_bind = "--cpu-bind=verbose,mask_cpu:{}".format(','.join([hex(cpu_mask) for i in range(ex_job.ncores)]))
+#                core_ids = []
+#                for node in ex_job.allocation.nodes:
+#                    core_ids.extend([str(core) for core in node.cores])
+#                cpu_bind = "--cpu-bind=verbose,map_cpu:{}".format(','.join(core_ids))
+            else:
+                cpu_bind = "--cpu-bind=verbose,cores"
+
+            ex_job.job_execution.args = [
+                "-n", "1",
+                "--cpus-per-task", str(ex_job.ncores),
+                "--overcommit",
+                "--mem-per-cpu=0",
+                "-m", "arbitrary",
                 cpu_bind]
 
         ex_job.job_execution.exec = 'srun'
@@ -141,14 +169,13 @@ class SlurmExecution(ExecutionSchema):
             ex_job.job_execution.args.extend(["--time", "0:{}".format(
                 int(ex_job.job_iteration.resources.wt.total_seconds()))])
 
-        if job_model != "threads":
-            ex_job.job_execution.args.append(run_conf_file)
-        else:
-            ex_job.job_execution.args.extend([job_exec, *job_args])
+#        if job_model in ["threads", "srun"]:
+        ex_job.job_execution.args.extend([job_exec, *job_args])
+#        else:
+#            ex_job.job_execution.args.append(run_conf_file)
 
-        if self.resources.binding:
-            ex_job.env.update({'QCG_PM_CPU_SET': ','.join([str(c) for c in sum(
-                [alloc.cores for alloc in ex_job.allocation.nodes], [])])})
+        if self.resources.binding and core_ids:
+            ex_job.env.update({'QCG_PM_CPU_SET': ','.join(core_ids)})
 
 
 class DirectExecution(ExecutionSchema):

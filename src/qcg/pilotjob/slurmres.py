@@ -1,12 +1,49 @@
 import logging
 import os
 import subprocess
+import sys
 
-from math import log2
+from math import log2, floor
 
 from qcg.pilotjob.errors import SlurmEnvError
 from qcg.pilotjob.resources import CRType, CRBind, Node, Resources, ResourcesType
 from qcg.pilotjob.config import Config
+
+
+def parse_local_cpus():
+    """Return information about available CPU's and cores in local system.
+    The information is gathered from ``lscpu`` command which besides the available CPUs informations, also returns
+    information about physical cores in the system, which is usefull for hyper threading systems.
+
+    Returns:
+        dict(str, list), dict(str, list): two maps with mapping:
+            core_id -> list of cpu's assigned to core
+            cpu_id -> list of cores (in most situations this will be a single element list)
+    """
+    cores = {}
+    cpus = {}
+
+    proc = subprocess.Popen(['lscpu', '-p'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = proc.communicate()
+    ex_code = proc.wait()
+    if ex_code != 0:
+        raise Exception("command lscpu failed with exit code {}: {}".format(ex_code, stderr))
+
+    for out_line in bytes.decode(stdout).splitlines():
+        # omit all commented lines
+        if out_line.startswith('#'):
+            continue
+
+        elems = out_line.split(',')
+        if len(elems) != 9:
+            logging.warning('warning: unknown output format "{}"'.format(out_line))
+
+        cpu,core,socket = elems[0:3]
+
+        cores.setdefault(core, []).append(cpu)
+        cpus.setdefault(cpu, []).append(core)
+
+    return cores, cpus
 
 
 def parse_nodelist(nodespec):
@@ -157,41 +194,109 @@ def parse_slurm_resources(config):
         raise SlurmEnvError(
             'Invalid node range arguments - node start {} greater than node end {}'.format(node_start, node_end))
 
-    slurm_job_cpus = os.environ['SLURM_JOB_CPUS_PER_NODE']
-    cores_num = parse_slurm_job_cpus(slurm_job_cpus)
+    slurm_job_cpus_def = os.environ['SLURM_JOB_CPUS_PER_NODE']
+    job_cpus = parse_slurm_job_cpus(slurm_job_cpus_def)
 
-    if len(node_names) != len(cores_num):
-        raise SlurmEnvError(
-            "failed to parse slurm env: number of nodes (%d) mismatch number of cores (%d)" % (len(node_names),
-                                                                                               len(cores_num)))
+    slurm_tasks_def = os.environ['SLURM_TASKS_PER_NODE']
+    job_tasks = parse_slurm_job_cpus(slurm_tasks_def)
+
+    if len(node_names) != len(job_cpus) or len(node_names) != len(job_tasks):
+        raise SlurmEnvError("failed to parse slurm env: number of nodes ({}) mismatch number of job cpus ({}:{})"
+                            "/job tasks ({}:{})".format(len(node_names), len(job_cpus), slurm_job_cpus_def,
+                                                        len(job_tasks), slurm_tasks_def))
     core_ids = None
     binding = False
 
+#    slots_num = job_cpus
+    slots_num = job_tasks
+
     if allocation_data is not None and 'CPU_IDs' in allocation_data['map']:
-        core_ids = parse_slurm_allocation_cpu_ids(allocation_data['list'], node_names[node_start:node_end],
-                                                  cores_num[node_start:node_end])
-        print('got cores binding per node: {}'.format(','.join(
+        cpu_ids = parse_slurm_allocation_cpu_ids(allocation_data['list'], node_names[node_start:node_end],
+                                                 job_cpus[node_start:node_end])
+        logging.debug('got available cpus per node: {}'.format(','.join(
             ['{}: [{}]'.format(node_name, ','.join([str(core) for core in node_cores]))
-             for node_name, node_cores in core_ids.items()])))
+             for node_name, node_cores in cpu_ids.items()])))
+
+        core_ids = {node_name: [str(cpu_id) for cpu_id in node_cpus] for node_name, node_cpus in cpu_ids.items()}
+        logging.debug('temporary core ids per node: {}'.format(','.join(
+            ['{}: [{}]'.format(node_name, ','.join([str(core) for core in node_cores]))
+             for node_name, node_cores in cpu_ids.items()])))
+
+
+        if job_cpus != job_tasks and all(job_cpus[i] == job_cpus[i+1] for i in range(len(job_cpus) - 1)):
+            # the number of available cpu's differs from number of requested tasks - two situations:
+            #  a) user want's execute less tasks than available cpu's
+            #  b) hyper-threading (many cpus for single core)
+            # in both situations we should execute only as much jobs as requested tasks
+            # with hyper-threading we should also bind many cpus to a single job
+            # to be able to assign system cpu's to physical cores we need information about cpu - for example from
+            # execution of 'lscpu' - which need to be execute on each node - but currently we assume that all nodes
+            # in allocation are homogenous
+            logging.debug('number of tasks ({}) differs from number of cpus ({}) - checking local cpus vs cores'.format(','.join([str(task) for task in job_tasks]), ','.join([str(cpu) for cpu in job_cpus])))
+            local_core_info, local_cpu_info = parse_local_cpus()
+
+#            if len(local_core_info) != len(local_cpu_info):
+
+            logging.info("number of available cpu's {} differs from number of available cores {} - "
+                         "HyperThreading".format(len(local_core_info), len(local_cpu_info)))
+
+            core_ids = {}
+            # group available cpu's into cores
+            for node_idx in range(node_start, node_end):
+                node_name = node_names[node_idx]
+                node_cpus = cpu_ids[node_name]
+                node_tasks = job_tasks[node_idx]
+
+                if len(local_core_info) ==  node_tasks:
+                    # number of tasks on a node is the same as number of cores
+                    core_ids[node_name] = [','.join(local_core_info[core_id]) for core_id in local_core_info]
+                else:
+                    # partition available cpu's on given number of tasks
+                    if node_tasks < len(local_core_info):
+                        # partition available cores on given number of tasks
+                        avail_cores = len(local_core_info)
+                        first_core = 0
+
+                        node_task_cpu_ids = []
+                        for task_nr in range(node_tasks):
+                            node_cores = floor(avail_cores / (node_tasks - task_nr))
+
+#                            logging.debug('assigning #{} ({} - {}) cores for task {}'.format(node_cores, first_core, first_core + node_cores, task_nr))
+                            cores_cpu_list = []
+                            for core_id in range(first_core, first_core + node_cores):
+                                cores_cpu_list.extend(local_core_info[str(core_id)])
+                            node_task_cpu_ids.append(','.join(cores_cpu_list))
+#                            logging.debug('assinged ({}) cpus for task {}'.format(node_task_cpu_ids[-1], task_nr))
+
+                            first_core += node_cores
+                            avail_cores -= node_cores
+
+                        core_ids[node_name] = node_task_cpu_ids
+                    else:
+                        # TODO: this needs futher work
+                        raise Exception('Not supported')
+
         binding = True
     elif 'SLURM_CPU_BIND_LIST' in os.environ and 'SLURM_CPU_BIND_TYPE' in os.environ and \
             os.environ['SLURM_CPU_BIND_TYPE'].startswith('mask_cpu'):
         core_ids = parse_slurm_env_binding(os.environ['SLURM_CPU_BIND_LIST'], node_names[node_start:node_end],
-                                           cores_num[node_start:node_end])
+                                           job_cpus[node_start:node_end])
         binding = True
     else:
         logging.warning('warning: failed to get slurm binding information - missing SLURM_CPU_BIND_LIST and CPU_IDSs')
 
     if binding:
-        logging.debug('core binding: %s', ','.join([str(id) for id in core_ids]))
+        logging.debug('core binding for {} nodes: {}'.format(len(core_ids),
+            '; '.join(['{}: {}'.format(str(node), str(slots)) for node,slots in core_ids.items()])))
+    else:
+        logging.warning('warning: no binding information')
 
     n_crs = None
     if 'CUDA_VISIBLE_DEVICES' in os.environ:
         n_crs = {CRType.GPU: CRBind(CRType.GPU, os.environ['CUDA_VISIBLE_DEVICES'].split(','))}
 
-    nodes = [Node(node_names[i], cores_num[i], 0, core_ids=core_ids[node_names[i]] if core_ids is not None else None,
+    nodes = [Node(node_names[i], slots_num[i], 0, core_ids=core_ids[node_names[i]] if core_ids is not None else None,
                   crs=n_crs) for i in range(node_start, node_end)]
-    logging.debug('generated %d nodes %s binding', len(nodes), 'with' if binding else 'without')
 
     return Resources(ResourcesType.SLURM, nodes, binding)
 
@@ -227,7 +332,7 @@ def parse_slurm_allocation_cpu_ids(allocation_data_list, node_names, cores_num):
 
             if name == 'Nodes':
                 curr_node = value
-                if any(c in value for c in ['-', '[', ']']):
+                if any(c in value for c in ['-', ',', '[', ']']):
                     curr_nodes.extend(parse_nodelist(value))
                 else:
                     curr_nodes.append(value)
@@ -253,7 +358,7 @@ def parse_slurm_allocation_cpu_ids(allocation_data_list, node_names, cores_num):
 
     if len(nodes) != len(node_names):
         raise SlurmEnvError('failed to parse cpu binding from job info: the node binding list ({}) differes from '
-                            'node list ({})'.format(len(nodes), len(node_names)))
+                            'node list ({}): {}'.format(len(nodes), len(node_names), str(allocation_data_list)))
 
     if len(nodes) != len(cores_num):
         raise SlurmEnvError('failed to parse cpu binding from job info: the node binding list ({}) differes from '

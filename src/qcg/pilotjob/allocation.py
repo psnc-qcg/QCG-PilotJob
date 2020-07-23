@@ -36,7 +36,7 @@ class NodeAllocation:
 
     Attributes:
         _node (Node): a node definition
-        _cores (list(int)): allocated cores
+        _cores (list(str)): allocated cores
         _crs (dict(CRType,CRAllocation|CRBindAllocation)): allocated crs
     """
 
@@ -58,7 +58,7 @@ class NodeAllocation:
 
     @property
     def cores(self):
-        """list(int): allocated cores on a node."""
+        """list(str): allocated cores on a node."""
         return self._cores
 
     @property
@@ -148,7 +148,7 @@ class Allocation:
         Returns:
             str: human readable string
         """
-        header = "%d cores @ %d nodes\n" % (self._cores, len(self._nodes))
+        header = "{} cores @ {} nodes\n".format(self._cores, len(self._nodes))
         return header + '\n'.join([str(node) for node in self._nodes])
 
     def description(self):

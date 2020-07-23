@@ -104,7 +104,7 @@ class CRBind:
     Attributes:
         crtype (CRType) - type of CR
         total_count (int) - total number of available crs
-        ids (list(int)) - list of all available instances
+        ids (list(str)) - list of all available instances
         _free (list(int)) - list of unused instances
     """
 
@@ -200,8 +200,8 @@ class Node:
     Attributes:
         _name (str): node name
         _total_cores (int): total number of cores on a node
-        _core_ids (list(int)): core identifiers
-        _free_cores (list(int)): free core identifiers
+        _core_ids (list(str)): core identifiers
+        _free_cores (list(str)): free core identifiers
         _crs (dict(crType,CR|CRBind)): list of available consumable resources
         resources (Resources): instance of resources the node belongs, set by constructor of Resources class
     """
@@ -212,8 +212,8 @@ class Node:
             name (str) - name of the node
             total_cores (int) - total number of available cores
             used (int) - initial number of used cores
-            core_ids (list(int)) - optional core identifiers (the list must have at least 'total_cores' elements)
-            free_cores (list(int)) - optional free core identifiers (the list must have total_cores-used elements)
+            core_ids (list(str)) - optional core identifiers (the list must have at least 'total_cores' elements)
+            free_cores (list(str)) - optional free core identifiers (the list must have total_cores-used elements)
             crs (dict(CRType,CR|CRBind)) - optional consumable resources
         """
         self._name = name
@@ -222,7 +222,7 @@ class Node:
         if core_ids:
             self._core_ids = core_ids
         else:
-            self._core_ids = list(range(self._total_cores))
+            self._core_ids = list([str(cid) for cid in  range(self._total_cores)])
 
         if free_cores:
             self._free_cores = free_cores
@@ -254,12 +254,12 @@ class Node:
 
     @property
     def free_ids(self):
-        """list(int): list of free core identifiers"""
+        """list(str): list of free core identifiers"""
         return self._free_cores
 
     @property
     def ids(self):
-        """list(int): list of all available core identifiers"""
+        """list(str): list of all available core identifiers"""
         return self._core_ids
 
     @property
