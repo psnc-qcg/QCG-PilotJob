@@ -365,7 +365,7 @@ def parse_slurm_allocation_cpu_ids(allocation_data_list, node_names, cores_num):
                             'ncores per node list ({})'.format(len(nodes), len(cores_num)))
 
     for idx, node in enumerate(nodes.keys()):
-        if len(nodes[node]) != cores_num[idx]:
+        if len(nodes[node]) < cores_num[idx]:
             raise SlurmEnvError('failed to parse cpu binding: the node binding for node ({}) ({}) differs from cores '
                                 'per node {}'.format(node, len(nodes[node]), cores_num[idx]))
 
@@ -440,3 +440,19 @@ def test_environment(env=None):
 
     print('parsed SLURM resources: {}'.format(result))
     return result
+
+
+if __name__ == '__main__':
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
+
+    res = parse_slurm_resources({})
+    print('slurm resources: type({}), binding({}), total nodes({}), total cores({})'.format(str(res.rtype), str(res.binding), res.total_nodes, res.total_cores))
+    for node in res.nodes:
+        print('\t{}: cores({}), ids({})'.format(node.name, node.total, node.ids))
