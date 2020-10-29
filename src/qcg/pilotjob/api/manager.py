@@ -656,8 +656,7 @@ class LocalManager(Manager):
               'log_file' - the location of the log file
               'log_level' - the log level ('DEBUG'); by default the log level is set to INFO
         """
-#        if not mp.get_context():
-        mp.set_start_method('spawn', force=True)
+        ctx = mp.get_context('spawn')
 
         try:
             from qcg.pilotjob.service import QCGPMServiceProcess
@@ -671,7 +670,7 @@ class LocalManager(Manager):
 
         server_args = [str(arg) for arg in server_args]
 
-        self.qcgpm_queue = mp.Queue()
+        self.qcgpm_queue = ctx.Queue()
         self.qcgpm_process = QCGPMServiceProcess(server_args, self.qcgpm_queue)
         logging.debug('manager process created')
 
