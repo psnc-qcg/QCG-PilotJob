@@ -357,13 +357,13 @@ class QCGPMService:
             logging.debug('setting new event loop')
             asyncio.set_event_loop(asyncio.new_event_loop())
 
-#        try:
-#            import nest_asyncio
-#            nest_asyncio.apply()
-#        except ImportError:
-#            logging.debug('not found nest_asyncio')
-#        except Exception as exc:
-#            logging.info(f'not applying nest_asyncio: {str(exc)}')
+        try:
+            import nest_asyncio
+            nest_asyncio.apply()
+        except ImportError:
+            logging.debug('not found nest_asyncio')
+        except Exception as exc:
+            logging.info(f'not applying nest_asyncio: {str(exc)}')
 
 #        asyncio.get_event_loop().set_debug(True)
 #        different child watchers - available in Python >=3.8
