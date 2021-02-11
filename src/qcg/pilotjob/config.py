@@ -151,6 +151,11 @@ class Config(Enum):
         'default': None
     }
 
+    SCHEDULER_ALG = {
+        'name': 'scheduler',
+        'default': 'default'
+    }
+
     def get(self, config):
         """Return configuration entry value from dictionary
 

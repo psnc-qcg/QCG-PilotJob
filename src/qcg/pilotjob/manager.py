@@ -458,7 +458,7 @@ class DirectManager:
         _logger.info('available resources: %s', self.resources)
 
         self._executor = Executor(self, conf, self.resources)
-        self._scheduler = Scheduler(self.resources)
+        self._scheduler = Scheduler(self.resources, conf)
         self.job_list = JobList()
 
         self._schedule_queue = []

@@ -1199,3 +1199,45 @@ def test_api_wait4all(tmpdir):
 
     rmtree(tmpdir)
 
+
+def test_api_scatter_scheduler(tmpdir):
+    cores = 3
+    nodes = ['n1', 'n2', 'n3', 'n4', 'n5', 'n6']
+
+    m = LocalManager(['--wd', str(tmpdir), '--nodes', ','.join(f'{nname}:{cores}' for nname in nodes), '--log', 'debug', '--scheduler', 'scatter'], {'wdir': str(tmpdir)})
+
+    try:
+        res = m.resources()
+        assert all(('total_nodes' in res, 'total_cores' in res, res['total_nodes'] == len(nodes), res['total_cores'] == len(nodes) * cores))
+
+        iters = len(nodes) * cores
+        # we use sleep to not interrupt scheduling jobs on subsequent nodes by finishing of previous jobs
+        ids = m.submit(Jobs().
+                       add(iteration=iters, exec='/bin/sleep', args=['2s'], stdout='sleep_${it}.out')
+                       )
+        jid = ids[0]
+        assert len(m.list()) == 1
+
+        m.wait4all()
+
+        jinfos = m.info_parsed(ids, withChilds=True)
+        assert all((len(jinfos) == 1, jid in jinfos, jinfos[jid].status  == 'SUCCEED'))
+        assert all((jinfos[jid].iterations, jinfos[jid].iterations.get('start', -1) == 0,
+                    jinfos[jid].iterations.get('stop', 0) == iters, jinfos[jid].iterations.get('total', 0) == iters,
+                    jinfos[jid].iterations.get('finished', 0) == iters, jinfos[jid].iterations.get('failed', -1) == 0))
+        assert len(jinfos[jid].childs) == iters
+        for iteration in range(iters):
+            job_it = jinfos[jid].childs[iteration]
+            assert all((job_it.iteration == iteration, job_it.name == '{}:{}'.format(jid, iteration),
+                        job_it.total_cores == 1, len(job_it.nodes) == 1)), str(job_it)
+            nname = nodes[iteration % len(nodes)]
+            assert job_it.nodes.get(nname, '-1') == [str(int(iteration / len(nodes)))], \
+                    f'{str(job_it.nodes)} vs {nname}:{int(iteration/len(nodes))}'
+
+        assert all(exists(tmpdir.join('sleep_{}.out'.format(i))) for i in range(iters))
+        m.remove(jid)
+    finally:
+        m.finish()
+        m.cleanup()
+
+    rmtree(tmpdir)

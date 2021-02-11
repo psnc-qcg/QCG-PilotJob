@@ -1,5 +1,12 @@
 from qcg.pilotjob.errors import InvalidAllocation
 from qcg.pilotjob.scheduleralgo import SchedulerAlgorithm
+from qcg.pilotjob.schedulerscatter import ScatterSchedulerAlgorithm
+from qcg.pilotjob.config import Config
+
+import logging
+
+
+_logger = logging.getLogger(__name__)
 
 
 class Scheduler:
@@ -11,14 +18,21 @@ class Scheduler:
         _active_allocations (set(Allocation)): currently active allocations
     """
 
-    def __init__(self, resources):
+    def __init__(self, resources, config=None):
         """Initialize scheduler.
 
         Args:
             resources (Resources): available resources
+            config (dict): configuration
         """
         self._resources = resources
-        self._scheduler_alg = SchedulerAlgorithm(self._resources)
+
+        if config and Config.SCHEDULER_ALG.get(config) == 'scatter':
+            _logger.info('initializing scatter scheduling algorithm')
+            self._scheduler_alg = ScatterSchedulerAlgorithm(self._resources)
+        else:
+            _logger.info('initializing default scheduling algorithm')
+            self._scheduler_alg = SchedulerAlgorithm(self._resources)
         self._active_allocations = set()
 
     def allocate_cores(self, min_cores, max_cores=None):
