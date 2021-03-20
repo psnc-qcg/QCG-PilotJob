@@ -134,6 +134,10 @@ class QCGPMService:
         parser.add_argument('--resume',
                             help='path to the QCG-PilotJob working directory to resume',
                             default=None)
+        parser.add_argument('--scheduler',
+                            help='resource scheduler [default|scatter]',
+                            default=Config.SCHEDULER_ALG.value['default'])
+
         self._args = parser.parse_args(args)
 
         if self._args.slurm_partition_nodes:
@@ -205,6 +209,7 @@ class QCGPMService:
             Config.SLURM_LIMIT_NODES_RANGE_BEGIN: self._args.slurm_limit_nodes_range_begin,
             Config.SLURM_LIMIT_NODES_RANGE_END: self._args.slurm_limit_nodes_range_end,
             Config.RESUME: self._args.resume,
+            Config.SCHEDULER_ALG: self._args.scheduler,
         }
 
     def __init__(self, args=None):
