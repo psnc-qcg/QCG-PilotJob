@@ -1430,7 +1430,10 @@ class DirectManagerHandler:
         Returns:
             stats (dict): current status statistics
         """
-        scheduling_jobs = failed_jobs = finished_jobs = executing_jobs = 0
+
+        job_stats = dict()
+        it_stats = dict()
+
         job_names = self._manager.job_list.jobs()
         for job_name in job_names:
             job = self._manager.job_list.get(job_name)
@@ -1438,14 +1441,13 @@ class DirectManagerHandler:
             if job is None:
                 _logger.warning('missing job\'s %s data', job_name)
             else:
-                if job.state() in [JobState.QUEUED, JobState.SCHEDULED]:
-                    scheduling_jobs += 1
-                elif job.state() in [JobState.EXECUTING]:
-                    executing_jobs += 1
-                elif job.state() in [JobState.FAILED, JobState.OMITTED]:
-                    failed_jobs += 1
-                elif job.state() in [JobState.CANCELED, JobState.SUCCEED]:
-                    finished_jobs += 1
+                job.state().stats(job_stats)
+
+                if job.has_iterations:
+                    for it_state in job.iteration_states:
+                        it_state.state().stats(it_stats)
+                else:
+                    job.state().stats(it_stats)
 
         resources = self._manager.resources
         return Response.ok(data={
@@ -1467,10 +1469,16 @@ class DirectManagerHandler:
                 'FreeCores': resources.free_cores,
             }, 'JobStats': {
                 'TotalJobs': len(job_names),
-                'InScheduleJobs': scheduling_jobs,
-                'FailedJobs': failed_jobs,
-                'FinishedJobs': finished_jobs,
-                'ExecutingJobs': executing_jobs,
+                'InScheduleJobs': job_stats.get('scheduling', 0),
+                'FailedJobs': job_stats.get('failed', 0),
+                'FinishedJobs': job_stats.get('finished', 0),
+                'ExecutingJobs': job_stats.get('executing', 0),
+            }, 'IterationStats': {
+                'TotalIterations': sum([v for v in it_stats.values()]),
+                'InScheduleIterations': it_stats.get('scheduling', 0),
+                'FailedIterations': it_stats.get('failed', 0),
+                'FinishedIterations': it_stats.get('finished', 0),
+                'ExecutingIterations': it_stats.get('executing', 0),
             }})
 
     async def handle_status_req(self, iface, request): #pylint: disable=W0613

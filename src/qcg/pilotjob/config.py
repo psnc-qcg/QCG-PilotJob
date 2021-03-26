@@ -15,56 +15,67 @@ class Config(Enum):
 
     EXECUTOR_WD = {
         'name': 'wd',
+        'cmd_opt': '--wd',
         'default': '.'
     }
 
     AUX_DIR = {
         'name': 'aux.dir',
+        'cmd_opt': None,
         'default': '.qcgpjm'
     }
 
     EXECUTION_NODES = {
         'name': 'nodes',
+        'cmd_opt': '--nodes',
         'default': None
     }
 
     ENVIRONMENT_SCHEMA = {
         'name': 'envs',
+        'cmd_opt': '--envschema',
         'default': 'auto'
     }
 
     RESOURCES = {
         'name': 'resources',
+        'cmd_opt': '--resources',
         'default': 'auto'
     }
 
     FILE_PATH = {
         'name': 'file',
+        'cmd_opt': '--file-path',
         'default': 'qcg_pm_reqs.json'
     }
 
     ZMQ_IP_ADDRESS = {
         'name': 'zmq.ip',
+        'cmd_opt': None,
         'default': '*'
     }
 
     ZMQ_PORT = {
         'name': 'zmq.port',
+        'cmd_opt': '--net-port',
         'default': None
     }
 
     ZMQ_PORT_MIN_RANGE = {
         'name': 'zmq.port.min',
+        'cmd_opt': '--net-port-min',
         'default': 2222,
     }
 
     ZMQ_PORT_MAX_RANGE = {
         'name': 'zmq.port.max',
+        'cmd_opt': '--net-port-max',
         'default': 9999,
     }
 
     ZMQ_IFACE_ADDRESS = {
         'name': 'zmq.address',
+        'cmd_opt': None,
         'get': lambda conf:
                'tcp://{}:{}'.format(str(Config.ZMQ_IP_ADDRESS.get(conf)), str(Config.ZMQ_PORT.get(conf)))
                if Config.ZMQ_PORT.get(conf) else
@@ -73,82 +84,110 @@ class Config(Enum):
 
     REPORT_FORMAT = {
         'name': 'report.format',
-        'default': 'text'
+        'cmd_opt': '--report-format',
+        'default': 'json'
     }
 
     REPORT_FILE = {
         'name': 'report.file',
+        'cmd_opt': '--report-file',
         'default': 'jobs.report'
     }
 
     LOG_LEVEL = {
         'name': 'log.level',
+        'cmd_opt': '--log',
         'default': 'info'
     }
 
     SYSTEM_CORE = {
         'name': 'system.core',
+        'cmd_opt': '--system-core',
         'default': False
     }
 
     ADDRESS_FILE = {
         'name': 'address.file',
+        'cmd_opt': None,
         'default': 'address'
     }
 
     FINAL_STATUS_FILE = {
         'name': 'final.status.file',
-        'default': 'final_status'
+        'cmd_opt': None,
+        'default': 'final_status.json'
     }
 
     DISABLE_NL = {
         'name': 'nl.disable',
+        'cmd_opt': '--disable-nl',
         'default': False
     }
 
     PROGRESS = {
         'name': 'progress',
+        'cmd_opt': '--show-progress',
         'default': False
     }
 
     GOVERNOR = {
         'name': 'governor',
+        'cmd_opt': '--governor',
         'default': False
     }
 
     RESUME = {
         'name': 'resume.path',
+        'cmd_opt': '--resume',
         'default': None
     }
 
     PARENT_MANAGER = {
         'name': 'manager.parent',
+        'cmd_opt': '--parent',
         'default': None
     }
 
     MANAGER_ID = {
         'name': 'manager.id',
+        'cmd_opt': '--id',
         'default': None
     }
 
     MANAGER_TAGS = {
         'name': 'manager.tags',
+        'cmd_opt': '--tags',
         'default': None
     }
 
     SLURM_PARTITION_NODES = {
         'name': 'slurm.nodes.partition',
+        'cmd_opt': '--slurm-partition-nodes',
         'default': None
     }
 
     SLURM_LIMIT_NODES_RANGE_BEGIN = {
         'name': 'slurm.nodes.limit.begin',
+        'cmd_opt': '--slurm-limit-nodes-range-begin',
         'default': None
     }
 
     SLURM_LIMIT_NODES_RANGE_END = {
         'name': 'slurm.nodes.limit.end',
+        'cmd_opt': '--slurm-limit-nodes-range-end',
         'default': None
+    }
+
+    OPENMPI_MODEL_MODULE = {
+        'name': 'model.openmpi.module',
+        'cmd_opt': '--openmpi-module',
+        'default': 'openmpi'
+    }
+
+    ENABLE_PROC_STATS = {
+        'name': 'enable.proc.stats',
+        'cmd_opt': '--enable-proc-stats',
+        'default': False
     }
 
     def get(self, config):
@@ -161,3 +200,4 @@ class Config(Enum):
             return self.value['get'](config)
 
         return config.get(self, self.value['default'])
+

@@ -3,3 +3,4 @@ click
 prompt_toolkit
 pytest
 psutil
+termcolor

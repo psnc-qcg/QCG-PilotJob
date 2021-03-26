@@ -32,7 +32,8 @@ The full list of currently supported options is presented below.
                          [--slurm-partition-nodes SLURM_PARTITION_NODES]
                          [--slurm-limit-nodes-range-begin SLURM_LIMIT_NODES_RANGE_BEGIN]
                          [--slurm-limit-nodes-range-end SLURM_LIMIT_NODES_RANGE_END]
-                         [--resume RESUME]
+                         [--resume RESUME] [--openmpi-module OPENMPI_MODULE]
+                         [--enable-proc-stats]
 
    optional arguments:
      -h, --help            show this help message and exit
@@ -84,3 +85,9 @@ The full list of currently supported options is presented below.
                            limit Slurm allocation to specified range of nodes
                            (ending node)
      --resume RESUME       path to the QCG-PilotJob working directory to resume
+     --openmpi-module OPENMPI_MODULE
+                           name of the module to load before launching openmpi
+                           model job
+     --enable-proc-stats   gather information about launched processes from
+                           system
+

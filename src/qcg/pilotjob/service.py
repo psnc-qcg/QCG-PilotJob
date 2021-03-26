@@ -8,6 +8,7 @@ import socket
 import sys
 import traceback
 import signal
+import json
 from datetime import datetime
 from multiprocessing import Process
 from os.path import exists, join, isabs
@@ -26,7 +27,9 @@ from qcg.pilotjob.resume import StateTracker
 from qcg.pilotjob.utils.auxdir import find_latest_aux_dir, is_aux_dir
 
 
-_logger = logging.getLogger(__name__)
+# when qcg.pilotjob.service is launch as partition manager, the '__name__' is set to '__main__'
+module_name = 'qcg.pilotjob.service'
+_logger = logging.getLogger(module_name)
 
 
 class QCGPMService:
@@ -57,83 +60,90 @@ class QCGPMService:
         parser.add_argument('--net',
                             help='enable network interface',
                             action='store_true')
-        parser.add_argument('--net-port',
+        parser.add_argument(Config.ZMQ_PORT.value['cmd_opt'],
                             help='port to listen for network interface (implies --net)',
                             type=int, default=None)
-        parser.add_argument('--net-port-min',
+        parser.add_argument(Config.ZMQ_PORT_MIN_RANGE.value['cmd_opt'],
                             help='minimum port range to listen for network interface if exact port number is not '
                                  'defined (implies --net)',
                             type=int, default=None)
-        parser.add_argument('--net-port-max',
+        parser.add_argument(Config.ZMQ_PORT_MAX_RANGE.value['cmd_opt'],
                             help='maximum port range to listen for network interface if exact port number is not '
                                  'defined (implies --net)',
                             type=int, default=None)
         parser.add_argument('--file',
                             help='enable file interface',
                             action='store_true')
-        parser.add_argument('--file-path',
+        parser.add_argument(Config.FILE_PATH.value['cmd_opt'],
                             help='path to the request file (implies --file)',
                             default=None)
-        parser.add_argument('--wd',
+        parser.add_argument(Config.EXECUTOR_WD.value['cmd_opt'],
                             help='working directory for the service',
                             default=Config.EXECUTOR_WD.value['default'])
-        parser.add_argument('--envschema',
+        parser.add_argument(Config.ENVIRONMENT_SCHEMA.value['cmd_opt'],
                             help='job environment schema [auto|slurm]',
                             default='auto')
-        parser.add_argument('--resources',
+        parser.add_argument(Config.RESOURCES.value['cmd_opt'],
                             help='source of information about available resources [auto|slurm|local] as well as a '
                                  'method of job execution (through local processes or as a Slurm sub jobs)',
                             default=Config.RESOURCES.value['default'])
-        parser.add_argument('--report-format',
+        parser.add_argument(Config.REPORT_FORMAT.value['cmd_opt'],
                             help='format of job report file [text|json]',
                             default=Config.REPORT_FORMAT.value['default'])
-        parser.add_argument('--report-file',
+        parser.add_argument(Config.REPORT_FILE.value['cmd_opt'],
                             help='name of the job report file',
                             default=Config.REPORT_FILE.value['default'])
-        parser.add_argument('--nodes',
+        parser.add_argument(Config.EXECUTION_NODES.value['cmd_opt'],
                             help='configuration of available resources (implies --resources local)',
                             )
-        parser.add_argument('--log',
+        parser.add_argument(Config.LOG_LEVEL.value['cmd_opt'],
                             help='log level',
                             choices=['critical', 'error', 'warning', 'info', 'debug', 'notset'],
                             default=Config.LOG_LEVEL.value['default'])
-        parser.add_argument('--system-core',
+        parser.add_argument(Config.SYSTEM_CORE.value['cmd_opt'],
                             help='reserve one of the core for the QCG-PJM',
                             default=False, action='store_true')
-        parser.add_argument('--disable-nl',
+        parser.add_argument(Config.DISABLE_NL.value['cmd_opt'],
                             help='disable custom launching method',
                             default=Config.DISABLE_NL.value['default'], action='store_true')
-        parser.add_argument('--show-progress',
+        parser.add_argument(Config.PROGRESS.value['cmd_opt'],
                             help='print information about executing tasks',
                             default=Config.PROGRESS.value['default'], action='store_true')
-        parser.add_argument('--governor',
+        parser.add_argument(Config.GOVERNOR.value['cmd_opt'],
                             help='run manager in the governor mode, where jobs will be scheduled to execute to the '
                                  'dependant managers',
                             default=Config.GOVERNOR.value['default'], action='store_true')
-        parser.add_argument('--parent',
+        parser.add_argument(Config.PARENT_MANAGER.value['cmd_opt'],
                             help='address of the parent manager, current instance will receive jobs from the parent '
                                  'manaqger',
                             default=Config.PARENT_MANAGER.value['default'])
-        parser.add_argument('--id',
+        parser.add_argument(Config.MANAGER_ID.value['cmd_opt'],
                             help='optional manager instance identifier - will be generated automatically when not '
                                  'defined',
                             default=Config.MANAGER_ID.value['default'])
-        parser.add_argument('--tags',
+        parser.add_argument(Config.MANAGER_TAGS.value['cmd_opt'],
                             help='optional manager instance tags separated by commas',
                             default=Config.MANAGER_TAGS.value['default'])
-        parser.add_argument('--slurm-partition-nodes',
+        parser.add_argument(Config.SLURM_PARTITION_NODES.value['cmd_opt'],
                             help='split Slurm allocation by given number of nodes, where each group will be '
                                  'controlled by separate manager (implies --governor)',
                             type=int, default=None)
-        parser.add_argument('--slurm-limit-nodes-range-begin',
+        parser.add_argument(Config.SLURM_LIMIT_NODES_RANGE_BEGIN.value['cmd_opt'],
                             help='limit Slurm allocation to specified range of nodes (starting node)',
                             type=int, default=None)
-        parser.add_argument('--slurm-limit-nodes-range-end',
+        parser.add_argument(Config.SLURM_LIMIT_NODES_RANGE_END.value['cmd_opt'],
                             help='limit Slurm allocation to specified range of nodes (ending node)',
                             type=int, default=None)
-        parser.add_argument('--resume',
+        parser.add_argument(Config.RESUME.value['cmd_opt'],
                             help='path to the QCG-PilotJob working directory to resume',
                             default=None)
+        parser.add_argument(Config.OPENMPI_MODEL_MODULE.value['cmd_opt'],
+                            help='name of the module to load before launching openmpi model job',
+                            default=Config.OPENMPI_MODEL_MODULE.value['default'])
+        parser.add_argument(Config.ENABLE_PROC_STATS.value['cmd_opt'],
+                            help='gather information about launched processes from system',
+                            default=Config.ENABLE_PROC_STATS.value['default'],
+                            action='store_true')
         self._args = parser.parse_args(args)
 
         if self._args.slurm_partition_nodes:
@@ -205,6 +215,8 @@ class QCGPMService:
             Config.SLURM_LIMIT_NODES_RANGE_BEGIN: self._args.slurm_limit_nodes_range_begin,
             Config.SLURM_LIMIT_NODES_RANGE_END: self._args.slurm_limit_nodes_range_end,
             Config.RESUME: self._args.resume,
+            Config.OPENMPI_MODEL_MODULE: self._args.openmpi_module,
+            Config.ENABLE_PROC_STATS: self._args.enable_proc_stats,
         }
 
     def __init__(self, args=None):
@@ -366,6 +378,8 @@ class QCGPMService:
         top_logger.addHandler(self._log_handler)
         top_logger.setLevel(logging._nameToLevel.get(Config.LOG_LEVEL.get(self._conf).upper()))
 
+        _logger = logging.getLogger(module_name)
+
         _logger.info('service %s version %s started %s @ %s (with tags %s)', Config.MANAGER_ID.get(self._conf),
                      qcg.pilotjob.__version__, str(datetime.now()), socket.gethostname(),
                      ','.join(Config.MANAGER_TAGS.get(self._conf)))
@@ -428,19 +442,6 @@ class QCGPMService:
 
         _logger.info('receiver stopped')
 
-        try:
-            response = await receiver.generate_status_response()
-
-            status_file = Config.FINAL_STATUS_FILE.get(self._conf)
-            status_file = status_file if isabs(status_file) else join(self._aux_dir, status_file)
-
-            if exists(status_file):
-                os.remove(status_file)
-
-            with open(status_file, 'a') as status_f:
-                status_f.write(response.to_json())
-        except Exception as exc:
-            _logger.warning('failed to write final status: %s', str(exc))
 
         _logger.info('stopping receiver ...')
         await receiver.stop()
@@ -475,6 +476,23 @@ class QCGPMService:
             return [iface for iface in self._ifaces if isinstance(iface, iface_class)]
 
         return self._ifaces
+
+    async def _write_final_status(self):
+        try:
+            _logger.info('writing final status')
+
+            response = await self._receiver.generate_status_response()
+
+            status_file = Config.FINAL_STATUS_FILE.get(self._conf)
+            status_file = status_file if isabs(status_file) else join(self._aux_dir, status_file)
+
+            if exists(status_file):
+                os.remove(status_file)
+
+            with open(status_file, 'a') as status_f:
+                status_f.write(json.dumps(response.data, indent=2))
+        except Exception as exc:
+            _logger.warning('failed to write final status: %s', str(exc))
 
     async def _run_service(self):
         """Asynchronous background task that starts receiver, waits for it's finish (signaled by the
@@ -529,6 +547,8 @@ class QCGPMService:
                 await self._manager.stop()
 
             _logger.info('manager stopped')
+
+            await self._write_final_status()
 
             usage = QCGPMService.get_rusage()
             _logger.info('service resource usage: %s', str(usage.get('service', {})))

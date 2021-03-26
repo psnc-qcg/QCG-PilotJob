@@ -4,6 +4,7 @@ import logging
 from qcg.pilotjob import logger as top_logger
 from qcg.pilotjob.errors import InternalError
 from qcg.pilotjob.resources import ResourcesType
+from qcg.pilotjob.config import Config
 
 
 _logger = logging.getLogger(__name__)
@@ -196,20 +197,20 @@ class SlurmExecution(ExecutionSchema):
                         rank_f.write(f'rank {rank_id}={node.node.name} slot={core}\n')
                         rank_id = rank_id + 1
 
-            ex_job.job_execution.args = [
+            mpi_args = [
                 '--rankfile',
                 str(rank_file),
             ]
         else:
-            ex_job.job_execution.args = [
+            mpi_args = [
                 '-n',
                 str(ex_job.ncores),
             ]
 
         ex_job.job_execution.exec = 'bash'
         ex_job.job_execution.args = ['-c',
-                'source /etc/profile & module load openmpi; exec mpirun {} {}'.format(
-                    job_exec, '' if not job_args else ' '.join(job_args))]
+                'source /etc/profile; module purge; module load {}; exec mpirun {} {} {}'.format(
+                    Config.OPENMPI_MODEL_MODULE.get(self.config), ' '.join(mpi_args), job_exec, '' if not job_args else ' '.join(job_args))]
 #        ex_job.job_execution.args.extend([job_exec, *job_args])
 
     def _preprocess_intelmpi(self, ex_job):
@@ -307,7 +308,7 @@ class SlurmExecution(ExecutionSchema):
         """
         job_model = ex_job.job_execution.model or 'default'
 
-        _logger.info(f'looking for job model {job_model}')
+        _logger.debug(f'looking for job model {job_model}')
         preprocess_method = SlurmExecution.JOB_MODELS.get(job_model)
         if not preprocess_method:
             raise InternalError(f"unknown job execution model '{job_model}'")

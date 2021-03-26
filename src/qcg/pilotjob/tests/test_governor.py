@@ -135,8 +135,10 @@ def test_register_manager_resources_single(tmpdir):
         send_request_valid(governor_address, { 'request': 'finish' })
         governor_process.join()
 
-        send_request_valid(direct_address, { 'request': 'finish' })
-        direct_process.join()
+        # we don't have to close the direct manager, as it will be automatically closed
+        # by the governor when it finish
+#        send_request_valid(direct_address, { 'request': 'finish' })
+#        direct_process.join()
     finally:
         if governor_process:
             governor_process.terminate()
@@ -195,8 +197,10 @@ def test_register_manager_resources_many(tmpdir):
         send_request_valid(governor_address, { 'request': 'finish' })
         governor_process.join()
 
-        for address in direct_address:
-            send_request_valid(address, { 'request': 'finish' })
+        # we don't have to close the direct manager, as it will be automatically closed
+        # by the governor when it finish
+#        for address in direct_address:
+#            send_request_valid(address, { 'request': 'finish' })
 
         for proc in direct_process:
             proc.join()
@@ -277,7 +281,9 @@ def test_submit_single_direct_single_job(tmpdir):
         send_request_valid(governor_address, { 'request': 'finish' })
         governor_process.join()
 
-        send_request_valid(direct_address, { 'request': 'finish' })
+        # we don't have to close the direct manager, as it will be automatically closed
+        # by the governor when it finish
+#        send_request_valid(direct_address, { 'request': 'finish' })
         direct_process.join()
     finally:
         if governor_process:
@@ -357,7 +363,9 @@ def test_governor_wait_for_all_jobs_single(tmpdir):
         governor_process.join(10)
         assert governor_process.exitcode == 0
 
-        send_request_valid(direct_address, { 'request': 'finish' })
+        # we don't have to close the direct manager, as it will be automatically closed
+        # by the governor when it finish
+#        send_request_valid(direct_address, { 'request': 'finish' })
         direct_process.join()
     finally:
         if governor_process:
@@ -442,7 +450,9 @@ def test_governor_wait_for_all_jobs_many(tmpdir):
         governor_process.join(10)
         assert governor_process.exitcode == 0
 
-        send_request_valid(direct_address, { 'request': 'finish' })
+        # we don't have to close the direct manager, as it will be automatically closed
+        # by the governor when it finish
+        #send_request_valid(direct_address, { 'request': 'finish' })
         direct_process.join()
     finally:
         if governor_process:
@@ -549,7 +559,9 @@ def test_governor_submit_many_instances(tmpdir):
         assert governor_process.exitcode == 0
 
         for i, process in enumerate(direct_process):
-            send_request_valid(direct_address[i], { 'request': 'finish' })
+            # we don't have to close the direct manager, as it will be automatically closed
+            # by the governor when it finish
+            #send_request_valid(direct_address[i], { 'request': 'finish' })
             process.join()
 
         # check working directories of jobs
@@ -589,7 +601,7 @@ def test_slurm_partition_resources():
 
     governor_id = 'm-governor'
     governor_args = ['--log', 'debug', '--wd', governor_dir, '--report-format', 'json', '--id', governor_id,
-                     '--slurm-partition-nodes', '1']
+                     '--system-core', '--slurm-partition-nodes', '1']
     governor_process, governor_address = fork_manager(governor_args)
 
     time.sleep(10)
@@ -630,7 +642,7 @@ def test_slurm_partition_submit():
 
     governor_id = 'm-governor'
     governor_args = ['--log', 'debug', '--wd', str(governor_dir), '--report-format', 'json', '--id', governor_id,
-                     '--slurm-partition-nodes', '1']
+                     '--system-core', '--slurm-partition-nodes', '1']
     governor_process, governor_address = fork_manager(governor_args)
 
     time.sleep(10)

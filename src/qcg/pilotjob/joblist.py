@@ -28,6 +28,16 @@ class JobState(Enum):
         return self in [JobState.SUCCEED, JobState.FAILED, JobState.CANCELED,
                         JobState.OMITTED]
 
+    def stats(self, stats):
+        if self in [JobState.QUEUED, JobState.SCHEDULED]:
+            stats['scheduling'] = stats.get('scheduling', 0) + 1
+        elif self in [JobState.EXECUTING]:
+            stats['executing'] = stats.get('executing', 0) + 1
+        elif self in [JobState.FAILED, JobState.OMITTED]:
+            stats['failed'] = stats.get('failed', 0) + 1
+        elif self in [JobState.CANCELED, JobState.SUCCEED]:
+            stats['finished'] = stats.get('finished', 0) + 1
+
 
 class JobExecution:
     """The execution element of job description.

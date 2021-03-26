@@ -94,6 +94,7 @@ class Receiver:
         self._handler = handler
 
         self._active_ifaces = 0
+        self._inited_ifaces = 0
 
         self._ifaces = ifaces
         self._tasks = []
@@ -164,13 +165,14 @@ class Receiver:
 
     def _started_iface(self, iface):
         self._active_ifaces = self._active_ifaces + 1
+        self._inited_ifaces = self._inited_ifaces - 1
         _logger.info(f'receiver - interface {iface.__class__.__name__} activated ({self._active_ifaces} active)')
 
     def _stopped_iface(self, iface):
         self._active_ifaces = self._active_ifaces - 1
-        _logger.info(f'receiver - interface {iface.__class__.__name__} stopped ({self._active_ifaces} active)')
+        _logger.info(f'receiver - interface {iface.__class__.__name__} stopped ({self._active_ifaces} active, {self._inited_ifaces} initialized)')
 
-        if self._active_ifaces == 0:
+        if self._inited_ifaces == 0 and self._active_ifaces == 0:
             _logger.info('No more active interfaces - finishing')
             self.set_finish(True)
 
@@ -293,6 +295,7 @@ class Receiver:
             if task is not None:
                 self._tasks.append(task)
 
+        self._inited_ifaces = len(self._tasks)
         _logger.info('Successfully initialized %d interfaces', len(self._tasks))
 
     async def stop(self):

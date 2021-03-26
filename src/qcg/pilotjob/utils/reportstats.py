@@ -5,6 +5,9 @@ import statistics
 import traceback
 import re
 
+from qcg.pilotjob.utils.auxdir import find_single_aux_dir, find_report_files, find_log_files
+from qcg.pilotjob.utils.util import parse_datetime
+
 from json import JSONDecodeError
 from datetime import datetime, timedelta
 from os.path import exists, join, abspath, isdir
@@ -12,134 +15,39 @@ from os import listdir
 from math import ceil
 
 
-AUX_DIR_PTRN = re.compile(r'\.qcgpjm-service-.*')
-
-def find_aux_dirs(path):
-    apath = abspath(path)
-    return [join(apath, entry) for entry in listdir(apath) \
-            if AUX_DIR_PTRN.match(entry) and isdir(join(apath, entry))]
-
-
-def find_report_files(path):
-    report_files = []
-
-    print('looking for report files in path {} ...'.format(path))
-    for aux_path in find_aux_dirs(path):
-        report_file = join(aux_path, 'jobs.report')
-        if exists(report_file):
-            report_files.append(report_file)
-
-    print('found report files: {}'.format(','.join(report_files)))
-    return report_files
-
-
-def find_log_files(path):
-    log_files = []
-
-    print('looking for log files in path {} ...'.format(path))
-    for aux_path in find_aux_dirs(path):
-        log_file = join(aux_path, 'service.log')
-        if exists(log_file):
-            log_files.append(log_file)
-
-    print('found log files: {}'.format(','.join(log_files)))
-    return log_files
-
 
 class JobsReportStats:
 
-    def __init__(self, args=None):
+    def __init__(self, report_files, log_files=None, verbose=False):
         """
         Analyze QCG-PJM execution.
 
         Args:
-            args(str[]) - arguments, if None the command line arguments are parsed
+            report_files (list(str)) - list of paths to the report files
+            log_files (list(str)) - list of paths to the log files
         """
-        self.__args = self.__get_argument_parser().parse_args(args)
-
-        self.report_files = []
-        self.log_files = []
-
-        if self.__args.wdir and not exists(self.__args.wdir):
-            raise Exception('working directory path "{}" not exists'.format(self.__args.wdir))
-
-        if self.__args.reports:
-            for report in self.__args.reports:
-                if not exists(report):
-                    raise Exception('report file {} not exists'.format(format(report)))
-
-            self.report_files = self.__args.reports
-
-        if self.__args.logs:
-            for log_file in self.__args.logs:
-                if not exists(log_file):
-                    raise Exception('service log file "{}" not exists'.format(log_file))
-
-            self.log_files = self.__args.logs
-
-        if not self.report_files:
-            if self.__args.wdir:
-                self.report_files = find_report_files(self.__args.wdir)
-
-            if not self.report_files or not all((exists(report) for report in self.report_files)):
-                raise Exception('report file not accessible or not defined')
-
-        if not self.log_files:
-            if self.__args.wdir:
-                self.log_files = find_log_files(self.__args.wdir)
-
-        self.job_size = self.__args.job_size
-        self.job_time = self.__args.job_time
+        self.report_files = report_files
+        self.log_files = log_files or []
+        self.verbose = verbose
 
         self.jstats = {}
         self.res = {}
-        self.stats = {}
 
+        self._analyze()
 
-    def analyze(self):
-        self.__read_report_files(self.report_files)
+    def job_stats(self):
+        return self.jstats
+
+    def resources(self):
+        return self.res
+
+    def _analyze(self):
+        self._read_report_files(self.report_files)
 
         if self.log_files:
-            self.__parse_service_logs(self.log_files)
+            self._parse_service_logs(self.log_files)
         
-        if self.job_size and self.job_time and self.res.get('cores', 0) > 0:
-            self.__compute_perfect_runtime()
-
-        self.__print_stats()
-
-
-    def __get_argument_parser(self):
-        """
-        Create argument parser.
-        """
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--reports",
-                            help="paths to the jobs report files",
-                            type=open, default=None, nargs='*')
-        parser.add_argument("--logs",
-                            help="paths to the service log file",
-                            type=open, default=None, nargs='*')
-        parser.add_argument("--wdir",
-                            help="path to the service working directory",
-                            default=None)
-        parser.add_argument('--job-size', help='each job required number of cores',
-                            type=int,
-                            default=None)
-        parser.add_argument('--job-time', help='each job expected runtime',
-                            type=float,
-                            default=None)
-
-        return parser
-
-
-    def __parse_datetime(self, datetime_str):
-        try:
-            return datetime.strptime(datetime_str, '%Y-%m-%dT%H:%M:%S.%f')
-        except ValueError:
-            return datetime.strptime(datetime_str, '%Y-%m-%dT%H:%M:%S')
-
-
-    def __read_report_files(self, report_files):
+    def _read_report_files(self, report_files):
         """
         Read QCG-PJM json report file.
         The read data with statistics data are written to the self.jstats dictionary.
@@ -148,11 +56,16 @@ class JobsReportStats:
             report_file (str) - path to the QCG-PJM json report file
         """
         self.jstats = {'jobs': {}}
+        min_queue, max_queue, min_start, max_finish = None, None, None, None
+
+        if self.verbose:
+            print(f'reading reports from {",".join(report_files)} files ...')
 
         for report_file in report_files:
-            print('parsing report file {} ...'.format(report_file))
+            if self.verbose:
+                print('parsing report file {} ...'.format(report_file))
+
             with open(report_file, 'r') as report_f:
-                min_queue, max_queue, min_start, max_finish = None, None, None, None
 
                 for line, entry in enumerate(report_f, 1):
                     try:
@@ -164,61 +77,77 @@ class JobsReportStats:
                         if not attr in job_entry:
                             raise Exception('wrong jobs.report {} file format: missing \'{}\' attribute'.format(report_file, attr))
 
-                    rtime_t = datetime.strptime(job_entry['runtime']['rtime'], "%H:%M:%S.%f")
-                    rtime = timedelta(hours=rtime_t.hour, minutes=rtime_t.minute, seconds=rtime_t.second, microseconds=rtime_t.microsecond)
+                    rtime = None
+                    if 'rtime' in job_entry['runtime']:
+                        rtime_t = datetime.strptime(job_entry['runtime']['rtime'], "%H:%M:%S.%f")
+                        rtime = timedelta(hours=rtime_t.hour, minutes=rtime_t.minute, seconds=rtime_t.second, microseconds=rtime_t.microsecond)
 
                     # find queued time
                     queued_state = list(filter(lambda st_en: st_en['state'] == 'QUEUED', job_entry['history']))
-                    assert len(queued_state) == 1
 
                     # find allocation creation time
                     schedule_state = list(filter(lambda st_en: st_en['state'] == 'SCHEDULED', job_entry['history']))
-                    assert len(schedule_state) == 1
 
                     # find start executing time
                     exec_state = list(filter(lambda st_en: st_en['state'] == 'EXECUTING', job_entry['history']))
-                    assert len(exec_state) == 1
 
                     # find finish executing time
                     finish_state = list(filter(lambda st_en: st_en['state'] == 'SUCCEED', job_entry['history']))
                     assert len(finish_state) == 1, 'for job {} in line {}'.format(job_entry['name'], line)
 
-                    queued_time = self.__parse_datetime(queued_state[0]['date'])
-                    schedule_time = self.__parse_datetime(schedule_state[0]['date'])
-                    start_time = self.__parse_datetime(exec_state[0]['date'])
-                    finish_time = self.__parse_datetime(finish_state[0]['date'])
+                    queued_time = parse_datetime(queued_state[0]['date']) if queued_state else None
+                    schedule_time = parse_datetime(schedule_state[0]['date']) if schedule_state else None
+                    start_time = parse_datetime(exec_state[0]['date']) if exec_state else None
+                    finish_time = parse_datetime(finish_state[0]['date']) if finish_state else None
 
-                    self.jstats['jobs'][job_entry['name']] = { 'r_time': rtime, 'queue_time': queued_time, 'sched_time': schedule_time, 's_time': start_time, 'f_time': finish_time, 'name': job_entry['name'] }
+                    self.jstats['jobs'][job_entry['name']] = {
+                        'r_time': rtime,
+                        'queue_time': queued_time,
+                        'sched_time': schedule_time,
+                        's_time': start_time,
+                        'f_time': finish_time,
+                        'name': job_entry['name'],
+                        'pid': job_entry['runtime'].get('pid', None),
+                        'pname': job_entry['runtime'].get('pname', None),
+                        'runtime': job_entry['runtime'],
+                        'history': job_entry['history'],
+                        'state': job_entry['state'],
+                        'messages': job_entry.get('messages'),
+                    }
 
-                    if not min_queue or queued_time < min_queue:
-                        min_queue = queued_time
+                    if queued_time:
+                        if not min_queue or queued_time < min_queue:
+                            min_queue = queued_time
 
-                    if not max_queue or queued_time > max_queue:
-                        max_queue = queued_time
+                        if not max_queue or queued_time > max_queue:
+                            max_queue = queued_time
 
-                    if not min_start or start_time < min_start:
-                        min_start = start_time
+                    if start_time:
+                        if not min_start or start_time < min_start:
+                            min_start = start_time
 
-                    if not max_finish or finish_time > max_finish:
-                        max_finish = finish_time
+                        if not max_finish or finish_time > max_finish:
+                            max_finish = finish_time
 
-            self.jstats['first_queue'] = min_queue
-            self.jstats['last_queue'] = max_queue
-            self.jstats['queue_time'] = max_queue - min_queue
-            self.jstats['first_start'] = min_start
-            self.jstats['last_finish'] = max_finish
-            self.jstats['execution_time'] = max_finish - min_start
-            self.jstats['total_time'] = max_finish - min_queue
+        self.jstats['first_queue'] = min_queue
+        self.jstats['last_queue'] = max_queue
+        self.jstats['queue_time'] = max_queue - min_queue if all((max_queue is not None, min_queue is not None)) else None
+        self.jstats['first_start'] = min_start
+        self.jstats['last_finish'] = max_finish
+        self.jstats['execution_time'] = max_finish - min_start if all((max_finish is not None, min_start is not None)) else None
+        self.jstats['total_time'] = max_finish - min_queue if all((max_finish is not None, min_queue is not None)) else None
 
-            rtimes = [ job['r_time'].total_seconds() for job in self.jstats['jobs'].values() ]
+        rtimes = [job['r_time'].total_seconds() for job in self.jstats['jobs'].values() if job['r_time']]
 
-            launchtimes = [ (job['s_time'] - job['sched_time']).total_seconds() for job in self.jstats['jobs'].values() ]
+        launchtimes = [(job['s_time'] - job['sched_time']).total_seconds() for job in self.jstats['jobs'].values() if job['s_time'] and job['sched_time']]
 
-            self.jstats['rstats'] = self.__generate_series_stats(rtimes)
-            self.jstats['launchstats'] = self.__generate_series_stats(launchtimes)
+        if rtimes:
+            self.jstats['rstats'] = self._generate_series_stats(rtimes)
 
+        if launchtimes:
+            self.jstats['launchstats'] = self._generate_series_stats(launchtimes)
 
-    def __generate_series_stats(self, serie):
+    def _generate_series_stats(self, serie):
         """
         Generate statistics about given data serie.
 
@@ -241,8 +170,7 @@ class JobsReportStats:
         stats['pvar'] = statistics.pvariance(serie)
         return stats
 
-
-    def __parse_service_logs(self, service_log_files):
+    def _parse_service_logs(self, service_log_files):
         res_regexp = re.compile('available resources: (\d+) \((\d+) used\) cores on (\d+) nodes')
         gov_regexp = re.compile('starting governor manager ...')
         resinfo_regexp = re.compile('selected (\w+) resources information')
@@ -273,26 +201,19 @@ class JobsReportStats:
             if service_log_files:
                 log_file = service_log_files[0]
 
-        print('parsing log file {} ...'.format(log_file))
+        if self.verbose:
+            print('parsing log file {} ...'.format(log_file))
 
         with open(log_file, 'r') as s_f:
             for line in s_f:
                 m = res_regexp.search(line.strip())
                 if m:
                     self.res = { 'cores': int(m.group(1)) - int(m.group(2)), 'nodes': int(m.group(3)) }
-                    print('found resources: {}'.format(str(self.res)))
+                    if self.verbose:
+                        print('found resources: {}'.format(str(self.res)))
                     break
 
-
-    def __compute_perfect_runtime(self):
-        job_cores = self.job_size * len(self.jstats.get('jobs', {}))
-        res = self.res.get('cores', 0)
-        self.stats['ideal_time'] = ceil(float(job_cores) / res) * self.job_time
-        if 'total_time' in self.jstats:
-            self.stats['efficiency'] = '{:.2f}%'.format(100.0 * self.stats['ideal_time'] / self.jstats['total_time'].total_seconds())
-
-
-    def __print_stats(self):
+    def print_stats(self):
         if self.jstats:
             print('{} jobs executed in {} secs'.format(len(self.jstats.get('jobs', {})),
                 self.jstats['total_time'].total_seconds() if 'total_time' in self.jstats else 0))
@@ -316,16 +237,3 @@ class JobsReportStats:
             for k, v in self.res.items():
                 print('\t{:>20}: {}'.format(k, v))
 
-        if self.stats:
-            print('general statistics:')
-            for k, v in self.stats.items():
-                print('\t{:>20}: {}'.format(k, v))
-
-
-if __name__ == "__main__":
-    try:
-        JobsReportStats().analyze()
-    except Exception as e:
-        sys.stderr.write('error: %s\n' % (str(e)))
-        traceback.print_exc()
-        exit(1)

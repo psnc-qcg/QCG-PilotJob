@@ -88,8 +88,7 @@ def check_service_log_string(resubstr, workdir='.'):
 
 
 def fork_manager(manager_args):
-    if not mp.get_context():
-        mp.set_start_method('fork')
+    mp.set_start_method("fork", force=True)
 
     qcgpm_queue = mp.Queue()
     qcgpm_process = QCGPMServiceProcess(manager_args, qcgpm_queue)

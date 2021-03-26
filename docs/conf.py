@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath('../src'))
 # -- Project information -----------------------------------------------------
 
 project = 'QCG-PilotJob'
-copyright = '2020, Piotr Kopta, Tomasz Piontek & Bartosz Bosak'
+copyright = '2021, Piotr Kopta, Tomasz Piontek & Bartosz Bosak'
 author = 'Piotr Kopta, Tomasz Piontek & Bartosz Bosak'
 html_logo = 'images/qcg-pj-logo.png'
 master_doc = 'index'

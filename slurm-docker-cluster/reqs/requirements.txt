@@ -3,3 +3,5 @@ click
 prompt_toolkit
 pytest
 pytest-cov
+psutil
+termcolor

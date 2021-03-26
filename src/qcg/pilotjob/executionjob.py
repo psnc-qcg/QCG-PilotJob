@@ -10,6 +10,7 @@ from string import Template
 
 from qcg.pilotjob.joblist import JobExecution
 from qcg.pilotjob.launcher.launcher import Launcher
+from qcg.pilotjob.config import Config
 import qcg.pilotjob.profile
 
 
@@ -39,6 +40,8 @@ class ExecutionJob:
         nlist (list(str)): list of allocation node names
         tasks_per_node (str): string describing number of cores (separated by comma) on each node
         job_execution (JobExecution): job execution element with variables replaced for specific iteration
+        process_pid (int): launched process identifier
+        process_name (str): launched process name
     """
 
     SIG_KILL_TIMEOUT = 10 # in seconds
@@ -79,6 +82,15 @@ class ExecutionJob:
         self.tasks_per_node = ','.join([str(node.ncores) for node in self.allocation.nodes])
 
         self.job_execution = self._replace_job_variables(self.job_iteration.job.execution)
+
+        self.process_pid = -1
+
+        # in the following steps this exec might be modified by execution schemas
+        # so in this moment this is exactly what user want to run
+        if self.job_execution.script:
+            self.process_name = 'bash'
+        else:
+            self.process_name = os.path.basename(self.job_execution.exec)
 
     def _replace_job_variables(self, job_execution):
         """Replace any variables used in job description.
@@ -203,7 +215,9 @@ class ExecutionJob:
             job_runtime = 0
 
         self.job_iteration.job.append_runtime({'rtime': str(job_runtime),
-                                               'exit_code': str(exit_code)}, iteration=self.job_iteration.iteration)
+                                               'exit_code': str(exit_code),
+                                               'pid': str(self.process_pid),
+                                               'pname': self.process_name}, iteration=self.job_iteration.iteration)
 
         self.exit_code = exit_code
         self.error_message = error_message
@@ -286,7 +300,7 @@ class LocalSchemaExecutionJob(ExecutionJob):
                                                                                                 jexec.stderr)
                     stderr_p = open(stderr_path, 'w')
 
-            _logger.debug("launching job %s: %s %s", self.job_iteration.name, jexec.exec, str(jexec.args))
+            _logger.debug(f"launching job {self.job_iteration.name}: {jexec.exec} {str(jexec.args)}")
 
             self._process = await asyncio.create_subprocess_exec(
                 jexec.exec, *jexec.args,
@@ -298,11 +312,13 @@ class LocalSchemaExecutionJob(ExecutionJob):
                 shell=False,
             )
 
-            _logger.info("local process %d for job %s launched", self._process.pid, self.job_iteration.name)
+            self.process_pid = self._process.pid
+
+            _logger.info(f"local process {self._process.pid} for job {self.job_iteration.name} launched")
 
             await self._process.wait()
 
-            _logger.info("local process for job %s finished", self.job_iteration.name)
+            _logger.info(f"local process for job {self.job_iteration.name} finished")
 
             exit_code = self._process.returncode
 
@@ -310,7 +326,7 @@ class LocalSchemaExecutionJob(ExecutionJob):
 
             self.postprocess(exit_code)
         except Exception as exc:
-            _logger.exception("execution failed: %s", str(exc))
+            _logger.exception(f"execution failed: {str(exc)}")
             self.postprocess(-1, str(exc))
         finally:
             try:
@@ -321,7 +337,7 @@ class LocalSchemaExecutionJob(ExecutionJob):
                 if stderr_p not in [asyncio.subprocess.DEVNULL, stdout_p]:
                     stderr_p.close()
             except Exception as exc:
-                _logger.error("cleanup failed: %s", str(exc))
+                _logger.error(f"cleanup failed: {str(exc)}")
 
     @profile
     async def launch(self):
@@ -380,10 +396,11 @@ class LauncherExecutionJob(ExecutionJob):
     launcher = None
 
     @classmethod
-    def start_agents(cls, wdir, aux_dir, nodes, binding):
+    def start_agents(cls, config, wdir, aux_dir, nodes, binding):
         """Start Launcher service agents on all nodes.
 
         Args:
+            config (dict): a dictionary with configuration
             wdir (str): launcher agent working directory
             aux_dir (str): launcher agent directory for placing log and temporary files
             nodes (list(str)): list of nodes where to start launcher agents
@@ -394,8 +411,11 @@ class LauncherExecutionJob(ExecutionJob):
 
         agents = [{'agent_id': node.name,
                    'slurm': {'node': node.name},
-                   'options': {'binding': binding, 'aux_dir': aux_dir}} for node in nodes]
-        cls.launcher = Launcher(wdir, aux_dir)
+                   'options': {'binding': binding,
+                               'aux_dir': aux_dir,
+                               'log_level': Config.LOG_LEVEL.get(config),
+                               'proc_stats': Config.ENABLE_PROC_STATS.get(config) }} for node in nodes]
+        cls.launcher = Launcher(config, wdir, aux_dir)
 
         asyncio.get_event_loop().run_until_complete(asyncio.ensure_future(cls.launcher.start(agents)))
 
@@ -450,6 +470,8 @@ class LauncherExecutionJob(ExecutionJob):
             message (dict): the finish status sent by launcher agent, the ``ec`` key is interpreted as exit code,
                 and ``message`` key as error description
         """
+        self.process_pid = message.get('pid', -1)
+
         self.postprocess(int(message.get('ec', -1)), message.get('message', None))
 
     async def cancel(self):

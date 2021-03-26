@@ -1164,7 +1164,7 @@ def test_api_wait4all(tmpdir):
         assert all(('total_nodes' in res, 'total_cores' in res, res['total_nodes'] == 1, res['total_cores'] == cores))
 
         start_time = datetime.now()
-        sleep = 2
+        sleep = 4
 
         iters = cores
         ids = m.submit(Jobs().
@@ -1177,7 +1177,8 @@ def test_api_wait4all(tmpdir):
 
         finished_time = datetime.now()
         wait_time = (finished_time - start_time).total_seconds()
-        assert all((wait_time > sleep, wait_time < sleep + 2))
+        # take into account poll delay - 2s by default
+        assert all((wait_time > sleep, wait_time < sleep + 3))
 
         jinfos = m.info_parsed(ids, withChilds=True)
         assert all((len(jinfos) == 1, jid in jinfos, jinfos[jid].status  == 'SUCCEED'))

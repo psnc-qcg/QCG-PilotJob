@@ -1,3 +1,7 @@
+Version 0.11   2021-03-26 Piotr Kopta <pkopta@man.poznan.pl>
+	* support for gathering metrics about launched processes
+	* bugfixes
+
 Version 0.10   2021-01-12 Piotr Kopta <pkopta@man.poznan.pl>, Laurens Veen
 <L.E.Veen@uva.nl>
 	* support for resuming prematurely interrupted execution

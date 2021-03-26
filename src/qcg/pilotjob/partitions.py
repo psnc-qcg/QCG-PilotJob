@@ -20,6 +20,7 @@ from qcg.pilotjob.request import ControlReq
 from qcg.pilotjob.resources import Resources
 from qcg.pilotjob.response import Response, ResponseCode
 from qcg.pilotjob.slurmres import in_slurm_allocation, parse_slurm_resources
+from qcg.pilotjob.utils.processes import terminate_subprocess
 
 
 _logger = logging.getLogger(__name__)
@@ -128,6 +129,7 @@ class PartitionManager:
         work_dir (str): the working directory of partition manager
         governor_address (str): the address of the governor manager where partition manager should register
         aux_dir (str): the auxiliary directory for partition manager
+        config (dict): the service configuration
         stdout_p (subprocess pipe): the standard output of launched instance of partition manager
         stderr_p (subprocess pipe): the standard error of launched instance of partition manager
         process (subprocess): the process of launched instance of partiton manager
@@ -135,7 +137,7 @@ class PartitionManager:
         _default_partition_manager_args (list(str)): additional arguments to launch instance of partition manager
      """
 
-    def __init__(self, mid, node_name, start_node, end_node, work_dir, governor_address, aux_dir):
+    def __init__(self, mid, node_name, start_node, end_node, work_dir, governor_address, aux_dir, config):
         """Initialize partition manager.
 
         Args:
@@ -146,6 +148,7 @@ class PartitionManager:
             work_dir (str): the working directory of partition manager
             governor_address (str): the address of the governor manager where partition manager should register
             aux_dir (str): the auxiliary directory for partition manager
+            config (dict): the service configuration
         """
         self.mid = mid
         self.node_name = node_name
@@ -154,6 +157,7 @@ class PartitionManager:
         self.work_dir = work_dir
         self.governor_address = governor_address
         self.aux_dir = aux_dir
+        self.config = config
 
         self.stdout_p = None
         self.stderr_p = None
@@ -161,7 +165,6 @@ class PartitionManager:
         self.process = None
 
         self._partition_manager_cmd = [sys.executable, '-m', 'qcg.pilotjob.service']
-        self._default_partition_manager_args = ['--report-format', 'json', '--system-core']
 
     async def launch(self):
         """Launch instance of partition manager."""
@@ -169,40 +172,52 @@ class PartitionManager:
         _logger.info('launching partition manager %s on node %s to control node numbers %d-%d',
                      self.mid, self.node_name, self.start_node, self.end_node)
 
-        slurm_args = ['-J', str(self.mid), '-w', self.node_name, '--oversubscribe', '--overcommit',
-                      '-N', '1', '-n', '1', '-D', self.work_dir]
+        try:
+            slurm_args = ['-J', str(self.mid), '-w', self.node_name, '--oversubscribe', '--overcommit',
+                          '-N', '1', '-n', '1', '-D', self.work_dir]
 
-        manager_args = [*self._default_partition_manager_args,
-                        '--id', self.mid, '--parent', self.governor_address,
-                        '--slurm-limit-nodes-range-begin', str(self.start_node),
-                        '--slurm-limit-nodes-range-end', str(self.end_node)]
+            manager_args = ['--id', self.mid, '--parent', self.governor_address,
+                            '--slurm-limit-nodes-range-begin', str(self.start_node),
+                            '--slurm-limit-nodes-range-end', str(self.end_node)]
 
-        if top_logger.level == logging.DEBUG:
-            manager_args.extend(['--log', 'debug'])
+            for arg in [Config.ZMQ_PORT_MIN_RANGE, Config.ZMQ_PORT_MAX_RANGE, Config.REPORT_FORMAT,
+                    Config.LOG_LEVEL, Config.OPENMPI_MODEL_MODULE]:
+                if self.config.get(arg, None) is not None:
+                    manager_args.extend([arg.value['cmd_opt'], str(self.config.get(arg))])
 
-        self.stdout_p = asyncio.subprocess.DEVNULL
-        self.stderr_p = asyncio.subprocess.DEVNULL
+            for arg in [Config.SYSTEM_CORE, Config.DISABLE_NL, Config.ENABLE_PROC_STATS]:
+                if self.config.get(arg, False):
+                    manager_args.append(arg.value['cmd_opt'])
 
-        if top_logger.level == logging.DEBUG:
-            self.stdout_p = open(os.path.join(self.aux_dir, 'part-manager-{}-stdout.log'.format(self.mid)), 'w')
-            self.stderr_p = open(os.path.join(self.aux_dir, 'part-manager-{}-stderr.log'.format(self.mid)), 'w')
+            self.stdout_p = asyncio.subprocess.DEVNULL
+            self.stderr_p = asyncio.subprocess.DEVNULL
 
-        _logger.debug('running partition manager process with args: %s',
-                      ' '.join([shutil.which('srun')] + slurm_args + self._partition_manager_cmd + manager_args))
+            if top_logger.level == logging.DEBUG:
+                self.stdout_p = open(os.path.join(self.aux_dir, 'part-manager-{}-stdout.log'.format(self.mid)), 'w')
+                self.stderr_p = open(os.path.join(self.aux_dir, 'part-manager-{}-stderr.log'.format(self.mid)), 'w')
+
+            _logger.debug('running partition manager process with args: %s',
+                          ' '.join([shutil.which('srun')] + slurm_args + self._partition_manager_cmd + manager_args))
+        except Exception as exc:
+            _logger.error(f'failed to start partition manager: {str(exc)}')
+            raise
 
         self.process = await asyncio.create_subprocess_exec(
             shutil.which('srun'), *slurm_args, *self._partition_manager_cmd, *manager_args,
             stdout=self.stdout_p, stderr=self.stderr_p)
 
-    def terminate(self):
+    async def terminate(self):
         """Terminate partition manager instance.
 
         Wait for 5 second for partition manager finish, and if not finished send SIGKILL
         """
         if self.process:
-            _logger.info('terminating partition manager %s @ %s', self.mid, self.start_node)
-            self.process.join(5)
-            self.process.terminate()
+            try:
+                _logger.info(f'terminating partition manager {self.mid} @ {self.start_node}')
+                await terminate_subprocess(self.process, f'partition-manager-{self.mid}', 10)
+                _logger.info(f'partition manager {self.mid} @ {self.start_node} terminated')
+            except Exception as exc:
+                _logger.warning(f'failed to terminate partition manager {self.mid} @ {self.start_node}: {str(exc)}')
 
 
 class ManagerInstance:
@@ -286,6 +301,36 @@ class ManagerInstance:
         self.submitted_jobs += msg.get('data', {}).get('submitted', 0)
         return {'njobs': msg.get('data', {}).get('submitted', 0),
                 'names': msg.get('data', {}).get('jobs', [])}
+
+    async def finish(self):
+        """Send submit request to the manager instance.
+
+        Args:
+            req: the submit request to send
+
+        Returns:
+            dict: with:
+               njobs (int): number of submitted jobs
+               names (list(str)): list of submited job names
+
+        Raises:
+            InvalidRequest: when request has wrong format
+        """
+        _logger.info(f'sending finish request to partition manager {self.mid}')
+        try:
+            await asyncio.wait_for(self.get_socket().send_json({
+                'request': 'control',
+                'command': ControlReq.REQ_CONTROL_CMD_FINISHAFTERALLTASKSDONE
+                }), timeout=2.0)
+
+            msg = await asyncio.wait_for(self.get_socket().recv_json(), timeout=2.0)
+
+            if not msg['code'] == 0:
+                raise InvalidRequest(
+                    'Failed to finish manager instance: {}'.format(msg.get('message', '')))
+        except asyncio.TimeoutError:
+            _logger.warning(f'failed to send finish command to partition manager {self.mid}: timeout')
+
 
 
 class TotalResources:
@@ -386,9 +431,12 @@ class GovernorManager:
 
         self._schedule_buffered_jobs_task = None
 
-        self._wait_for_register_timeout = 10
+        self._wait_for_register_timeout = 20
 
         self.start_time = datetime.now()
+
+        self.stop_processing = False
+
 
     async def setup_interfaces(self):
         """If defined, launch partition managers."""
@@ -466,7 +514,7 @@ class GovernorManager:
             self._partition_managers.append(
                 PartitionManager('partition-{}'.format(part_idx), part_node.name, part_idx * nodes_in_partition,
                                  min(part_idx * nodes_in_partition + nodes_in_partition, slurm_resources.total_nodes),
-                                 partition_manager_wdir, self.zmq_address, partition_manager_auxdir))
+                                 partition_manager_wdir, self.zmq_address, partition_manager_auxdir, self._config))
 
             _logger.debug('partition manager %s configuration created', part_idx)
 
@@ -493,7 +541,7 @@ class GovernorManager:
             except Exception:
                 _logger.error('one of partition manager failed to start - killing the rest')
                 # if one of partition manager didn't start - stop all instances and set governor manager finish flag
-                self._terminate_partition_managers_and_finish()
+                await self._terminate_partition_managers_and_finish()
                 raise InternalError('Partition managers not started')
 
             _logger.info('all (%s) partition managers started successfully', len(self._partition_managers))
@@ -510,7 +558,7 @@ class GovernorManager:
                     # timeout exceeded
                     _logger.error('not all partition managers registered - only %d on %d total', len(self.managers),
                                   len(self._partition_managers))
-                    self._terminate_partition_managers_and_finish()
+                    await self._terminate_partition_managers_and_finish()
                     raise InternalError('Partition managers not registered')
 
             _logger.info('available resources: %d (%d used) cores on %d nodes', self.total_resources.total_cores,
@@ -520,18 +568,17 @@ class GovernorManager:
         except Exception:
             _logger.error('setup of partition managers failed: %s', str(sys.exc_info()))
 
-    def _terminate_partition_managers(self):
+    async def _terminate_partition_managers(self):
         """Terminate all partition managers"""
-        for manager in self._partition_managers:
-            try:
-                manager.terminate()
-            except Exception:
-                _logger.warning('failed to terminate manager: %s', sys.exc_info())
-                _logger.error(traceback.format_exc())
+        try:
+            await asyncio.gather(*[manager.terminate() for manager in self._partition_managers])
+        except Exception:
+            _logger.warning('failed to terminate manager: %s', sys.exc_info())
+            _logger.error(traceback.format_exc())
 
-    def _terminate_partition_managers_and_finish(self):
+    async def _terminate_partition_managers_and_finish(self):
         """Terminate all partition managers and close receiver."""
-        self._terminate_partition_managers()
+        await self._terminate_partition_managers()
 
         if self._receiver:
             self._receiver.set_finish(True)
@@ -557,12 +604,17 @@ class GovernorManager:
             self.zmq_address = self._receiver.zmq_address
 
     async def stop(self):
+        _logger.info(f'stopping partition managers ...')
+
         """Stop governor manager and cleanup all resources."""
         for manager in self.managers.values():
-            manager.stop()
+            await manager.finish()
 
         # kill all partition managers
-        self._terminate_partition_managers()
+        await self._terminate_partition_managers()
+
+        for manager in self.managers.values():
+            manager.stop()
 
         # stop submiting buffered tasks
         if self._schedule_buffered_jobs_task:
@@ -591,7 +643,7 @@ class GovernorManager:
 
     async def _schedule_buffered_jobs(self):
         """Take all buffered jobs (already validated) and schedule them on available resources. """
-        while True:
+        while not self.stop_processing:
             try:
                 await asyncio.sleep(0.1)
 
@@ -649,6 +701,9 @@ class GovernorManager:
         Returns:
             Response: response to send back
         """
+        if self.stop_processing:
+            return Response.error('processing stopped')
+
         if request.params['id'] in self.managers:
             return Response.error('Manager with id "{}" already registered')
 
@@ -681,6 +736,9 @@ class GovernorManager:
         Returns:
             Response: the response to send back
         """
+        if self.stop_processing:
+            return Response.error('processing stopped')
+
         if request.command != ControlReq.REQ_CONTROL_CMD_FINISHAFTERALLTASKSDONE:
             return Response.error('Not supported command "{}" of finish control request'.format(request.command))
 
@@ -700,6 +758,9 @@ class GovernorManager:
         Returns:
             Response: the response to send back
         """
+        if self.stop_processing:
+            return Response.error('processing stopped')
+
         if self._min_scheduling_managers <= len(self.managers) and self.total_resources.total_cores == 0:
             return Response.error('Error: no resources available')
 
@@ -768,6 +829,9 @@ class GovernorManager:
         """
         n_jobs = 0
         job_names = []
+
+        if self.stop_processing:
+            return 0, []
 
         for req in jobs:
             job_desc = req['req']
@@ -861,6 +925,9 @@ class GovernorManager:
         Returns:
             Response: the response to send back
         """
+        if self.stop_processing:
+            return Response.error('processing stopped')
+
         result = {}
 
         for job_name in request.job_names:
@@ -893,6 +960,9 @@ class GovernorManager:
         Returns:
             Response: the response to send back
         """
+        if self.stop_processing:
+            return Response.error('processing stopped')
+
         # TODO: implement mechanism
         return Response.error('Currently not supported')
 
@@ -908,6 +978,9 @@ class GovernorManager:
         Returns:
             Response: the response to send back
         """
+        if self.stop_processing:
+            return Response.error('processing stopped')
+
         # TODO: implement mechanism
         return Response.error('Currently not supported')
 
@@ -923,6 +996,9 @@ class GovernorManager:
         Returns:
             Response: the response to send back
         """
+        if self.stop_processing:
+            return Response.error('processing stopped')
+
         # TODO: implement mechanism
         return Response.error('Currently not supported')
 
@@ -951,6 +1027,9 @@ class GovernorManager:
         Returns:
             Response: the response to send back
         """
+        if self.stop_processing:
+            return Response.error('processing stopped')
+
         return Response.ok(data={
             'total_nodes': self.total_resources.total_nodes,
             'total_cores': self.total_resources.total_cores,
@@ -968,6 +1047,9 @@ class GovernorManager:
         Returns:
             Response: the response to send back
         """
+        if self.stop_processing:
+            return Response.error('processing stopped')
+
         delay = 2
 
         if self._finish_task is not None:
@@ -989,6 +1071,9 @@ class GovernorManager:
         Returns:
             Response: the response to send back
         """
+        if self.stop_processing:
+            return Response.error('processing stopped')
+
         return await self.generate_status_response()
 
     async def handle_notify_req(self, iface, request): #pylint: disable=unused-argument
