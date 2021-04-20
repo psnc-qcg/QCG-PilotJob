@@ -190,6 +190,18 @@ class Config(Enum):
         'default': False
     }
 
+    ENABLE_RT_STATS = {
+        'name': 'enable.rt.stats',
+        'cmd_opt': '--enable-rt-stats',
+        'default': False
+    }
+
+    WRAPPER_RT_STATS = {
+        'name': 'wrapper.rt.stats',
+        'cmd_opt': '--wrapper-rt-stats',
+        'default': 'qcg_pj_launch_wrapper'
+    }
+
     def get(self, config):
         """Return configuration entry value from dictionary
 

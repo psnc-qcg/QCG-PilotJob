@@ -109,7 +109,7 @@ class JobExecution:
         if args is not None:
             if not isinstance(args, list):
                 raise IllegalJobDescription("Execution arguments must be an array")
-            self.args = args
+            self.args = [str(arg) for arg in args]
 
         if env is not None:
             if not isinstance(env, dict):

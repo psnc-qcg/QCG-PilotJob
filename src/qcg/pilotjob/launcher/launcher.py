@@ -124,13 +124,14 @@ class Launcher:
         """Stop all agents and release resources."""
         await self._cleanup()
 
-    async def submit(self, agent_id, app_id, args, stdin=None, stdout=None, stderr=None, env=None, wdir=None,
+    async def submit(self, agent_id, app_id, jname, args, stdin=None, stdout=None, stderr=None, env=None, wdir=None,
                      cores=None, finish_cb=None, finish_cb_args=None):
         """Submit application to be launched by the selected agent.
 
         Args:
             agent_id - agent that should launch applicaton
             app_id - application identifier
+            jname - job name
             args - aplication arguments
             stdin - path to the standard input file
             stdout - path to the standard output file
@@ -167,6 +168,7 @@ class Launcher:
             await out_socket.send_json({
                 'cmd': 'RUN',
                 'appid': app_id,
+                'jname': jname,
                 'args': args,
                 'stdin': stdin,
                 'stdout': stdout,

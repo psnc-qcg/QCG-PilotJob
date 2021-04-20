@@ -427,6 +427,7 @@ class DirectManager:
     The incoming jobs are scheduled and executed.
 
     Attributes:
+        start_time (DateTime): moment of start of the handler
         resources (Resources): available resources
         _executor (Executor): executor instance used to execute job iterations
         _scheduler (Scheduler): scheduler instance used to allocate resources for job iterations
@@ -448,6 +449,8 @@ class DirectManager:
             config (dict): QCG-PilotJob configuration
             parent_manager (str): address of the governor manager
         """
+        self.start_time = datetime.now()
+
         conf = config or None
         self.tracer = tracer
         self.resources = get_resources(conf)
@@ -963,9 +966,7 @@ class DirectManagerHandler:
         _manager (Manager): manager instance
         _finish_task (asyncio.Future): the finish task
         _receiver (Receiver): receiver instance
-        start_time (DateTime): moment of start of the handler
     """
-
     def __init__(self, manager):
         """Initialize instance.
 
@@ -977,7 +978,6 @@ class DirectManagerHandler:
         self._finish_task = None
         self._receiver = None
 
-        self.start_time = datetime.now()
 
     def set_receiver(self, receiver):
         """Set receiver.
@@ -1452,7 +1452,9 @@ class DirectManagerHandler:
         resources = self._manager.resources
         return Response.ok(data={
             'System': {
-                'Uptime': str(datetime.now() - self.start_time),
+                'Started': str(self._manager.start_time),
+                'Generated': str(datetime.now()),
+                'Uptime': str(datetime.now() - self._manager.start_time),
                 'Zmqaddress': self._receiver.zmq_address,
                 'Ifaces': [iface.name() for iface in self._receiver.interfaces] \
                     if self._receiver and self._receiver.interfaces else [],

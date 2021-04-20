@@ -414,7 +414,9 @@ class LauncherExecutionJob(ExecutionJob):
                    'options': {'binding': binding,
                                'aux_dir': aux_dir,
                                'log_level': Config.LOG_LEVEL.get(config),
-                               'proc_stats': Config.ENABLE_PROC_STATS.get(config) }} for node in nodes]
+                               'proc_stats': Config.ENABLE_PROC_STATS.get(config),
+                               'rt_stats': Config.ENABLE_RT_STATS.get(config),
+                               'rt_wrapper': Config.WRAPPER_RT_STATS.get(config) }} for node in nodes]
         cls.launcher = Launcher(config, wdir, aux_dir)
 
         asyncio.get_event_loop().run_until_complete(asyncio.ensure_future(cls.launcher.start(agents)))
@@ -427,7 +429,7 @@ class LauncherExecutionJob(ExecutionJob):
             cls.launcher = None
 
     @profile
-    def __init__(self, executor, envs, allocation, job_iteration):
+    def __init__(self, executor, envs, allocation, job_iteration, schema):
         """Initialize instance.
 
         Args:
@@ -435,15 +437,19 @@ class LauncherExecutionJob(ExecutionJob):
             envs (list(Environment)): list of environment instances
             allocation (Allocation): scheduled allocation for job iteration
             job_iteration (SchedulingIteration): execution schema
+            schema (ExecutionSchema): execution schema
         """
         super().__init__(executor, envs, allocation, job_iteration)
-        self.env_opts = {'nohostfile': True}
+        self._schema = schema
+        if schema:
+            self.env_opts = schema.get_env_opts()
 
     def preprocess(self):
         """Prepare environment for job execution.
         Setup sandbox and environment variables. Resolve module loading and virtual environment activation.
         """
         super().setup_sandbox()
+        self._schema.preprocess(self)
         super().preprocess()
 
     @profile
@@ -454,6 +460,7 @@ class LauncherExecutionJob(ExecutionJob):
 
         await self.__class__.launcher.submit(node.node.name,
                                              self.jid,
+                                             self.job_iteration.name,
                                              [jexec.exec, *jexec.args],
                                              stdin=os.path.join(self.wd_path, jexec.stdin) if jexec.stdin else None,
                                              stdout=os.path.join(self.wd_path, jexec.stdout) if jexec.stdout else None,

@@ -144,6 +144,13 @@ class QCGPMService:
                             help='gather information about launched processes from system',
                             default=Config.ENABLE_PROC_STATS.value['default'],
                             action='store_true')
+        parser.add_argument(Config.ENABLE_RT_STATS.value['cmd_opt'],
+                            help='gather exact start & stop information of launched processes',
+                            default=Config.ENABLE_RT_STATS.value['default'],
+                            action='store_true')
+        parser.add_argument(Config.WRAPPER_RT_STATS.value['cmd_opt'],
+                            help='exact start & stop information wrapper path',
+                            default=Config.WRAPPER_RT_STATS.value['default'])
         self._args = parser.parse_args(args)
 
         if self._args.slurm_partition_nodes:
@@ -217,6 +224,8 @@ class QCGPMService:
             Config.RESUME: self._args.resume,
             Config.OPENMPI_MODEL_MODULE: self._args.openmpi_module,
             Config.ENABLE_PROC_STATS: self._args.enable_proc_stats,
+            Config.ENABLE_RT_STATS: self._args.enable_rt_stats,
+            Config.WRAPPER_RT_STATS: self._args.wrapper_rt_stats,
         }
 
     def __init__(self, args=None):

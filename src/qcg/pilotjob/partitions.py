@@ -185,7 +185,8 @@ class PartitionManager:
                 if self.config.get(arg, None) is not None:
                     manager_args.extend([arg.value['cmd_opt'], str(self.config.get(arg))])
 
-            for arg in [Config.SYSTEM_CORE, Config.DISABLE_NL, Config.ENABLE_PROC_STATS]:
+            for arg in [Config.SYSTEM_CORE, Config.DISABLE_NL, Config.ENABLE_PROC_STATS, Config.ENABLE_RT_STATS,
+                        Config.WRAPPER_RT_STATS]:
                 if self.config.get(arg, False):
                     manager_args.append(arg.value['cmd_opt'])
 

@@ -4,6 +4,7 @@ import re
 
 AUX_DIR_PTRN = re.compile(r'\.qcgpjm-service-.*')
 PROC_TRACE_PTRN = re.compile(r'ptrace_.*\.log')
+RT_PTRN = re.compile(r'rtimes_.*\.log')
 
 
 def is_aux_dir(path):
@@ -88,6 +89,26 @@ def find_report_files(path):
     return report_files
 
 
+def find_final_status_files(path):
+    """Find all files named `final_status.json` in qcg-pilotjob auxiliary directories in given path.
+    First we look for auxilary directories, and then in those dirs we look for `final_status.json` files.
+
+    Args:
+        path (str): path to directory where to look for report files
+
+    Returns:
+        list(str): list of all `final_status.json` files in given path.
+    """
+    report_files = []
+
+    for aux_path in find_aux_dirs(path):
+        report_file = os.path.join(aux_path, 'final_status.json')
+        if os.path.isfile(report_file):
+            report_files.append(report_file)
+
+    return report_files
+
+
 def find_log_files(path):
     """Find all files named `service.log` in qcg-pilotjob auxiliary directories in given path.
     First we look for auxilary directories, and then in those dirs we look for `service.log` files.
@@ -120,4 +141,18 @@ def find_proc_traces_files(path):
     apath = os.path.abspath(path)
     return [os.path.join(apath, entry) for entry in os.listdir(apath)
             if PROC_TRACE_PTRN.match(entry) and os.path.isfile(os.path.join(apath, entry))]
+
+
+def find_rtimes_files(path):
+    """Find in given path files which names matches processes real times log name pattern.
+
+    Args:
+        path (str): path where real times logs will be searched
+
+    Returns:
+        list(str): list of paths with files matches processes real times logs name pattern
+    """
+    apath = os.path.abspath(path)
+    return [os.path.join(apath, entry) for entry in os.listdir(apath)
+            if RT_PTRN.match(entry) and os.path.isfile(os.path.join(apath, entry))]
 

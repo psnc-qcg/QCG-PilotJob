@@ -103,8 +103,8 @@ class Executor:
 
         try:
             try:
-                if all((self._is_node_launcher, len(allocation.nodes) == 1, allocation.nodes[0].ncores == 1)):
-                    execution_job = LauncherExecutionJob(self, self.job_envs, allocation, job_iteration)
+                if self._is_node_launcher:
+                    execution_job = LauncherExecutionJob(self, self.job_envs, allocation, job_iteration, self.schema)
                 else:
                     execution_job = LocalSchemaExecutionJob(self, self.job_envs, allocation, job_iteration, self.schema)
 

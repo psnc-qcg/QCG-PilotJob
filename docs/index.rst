@@ -36,6 +36,7 @@ A python service for easy execution of many tasks inside a single allocation.
    fileinterface
    resourceschedulers
    resume
+   performance_tools
    performance_tuning
    processes
 
