@@ -74,7 +74,7 @@ def read_logs(wdir, verbose):
 
     stats = JobsReportStats(jobs_report_paths).job_stats()
     if verbose:
-        print(f'job report file "{jobs_report_path}" read')
+        print(f'job report file "{jobs_report_paths}" read')
 
     procs = ProcTraces(proc_traces_paths)
 

@@ -438,7 +438,6 @@ class QCGPMService:
         self._manager.stop_processing = True
         self._receiver.finished = True
 
-    @profile
     async def _stop_interfaces(self, receiver):
         """Asynchronous task working in background waiting for receiver finish flag to finish receiver.
         Before receiver will be stopped, the final status of QCG-PilotJob will be written to the file.
@@ -455,7 +454,6 @@ class QCGPMService:
         _logger.info('stopping receiver ...')
         await receiver.stop()
 
-    @profile
     def _job_status_change_notify(self, job_id, iteration, state, manager):
         """Callback function called when any job's iteration change it's state.
         The job reporter is called for finished jobs.
@@ -563,7 +561,6 @@ class QCGPMService:
             _logger.info('service resource usage: %s', str(usage.get('service', {})))
             _logger.info('jobs resource usage: %s', str(usage.get('jobs', {})))
 
-    @profile
     def start(self):
         """Start QCG-JobManager service.
 

@@ -116,7 +116,10 @@ class JobsReportStats:
 
                     rtime = None
                     if 'rtime' in job_entry['runtime']:
-                        rtime_t = datetime.strptime(job_entry['runtime']['rtime'], "%H:%M:%S.%f")
+                        if '.' in job_entry['runtime']['rtime']:
+                            rtime_t = datetime.strptime(job_entry['runtime']['rtime'], "%H:%M:%S.%f")
+                        else:
+                            rtime_t = datetime.strptime(job_entry['runtime']['rtime'], "%H:%M:%S")
                         rtime = timedelta(hours=rtime_t.hour, minutes=rtime_t.minute, seconds=rtime_t.second, microseconds=rtime_t.microsecond)
 
                     # find queued time

@@ -89,7 +89,6 @@ class Executor:
             except Exception as exc:
                 _logger.error('failed to stop node launcher agents: %s', str(exc))
 
-    @profile
     async def execute(self, allocation, job_iteration):
         """Asynchronusly execute job iteration inside allocation.
         After successfull prepared environment, a new execution job will be created
@@ -167,7 +166,7 @@ class Executor:
             exec_job = next(exec_job for exec_job in self._not_finished.values() if exec_job.job_iteration.job == job and exec_job.job_iteration.iteration == iteration)
             _logger.info(f'found execution job to cancel')
         except StopIteration:
-            _logger.error(f'iteration to cancel {job_iteration.name} not found in executor')
+            _logger.error(f'iteration to cancel {job.name}:{iteration} not found in executor')
             raise InternalError('iteration to cancel not found')
 
         asyncio.ensure_future(exec_job.cancel())

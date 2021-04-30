@@ -10,7 +10,6 @@ from datetime import datetime
 import zmq
 from zmq.asyncio import Context
 
-from qcg.pilotjob.config import Config
 from qcg.pilotjob import logger as top_logger
 
 
@@ -43,6 +42,8 @@ class Launcher:
     # due to eagle node wake up issues
     START_TIMEOUT_SECS = 600
     SHUTDOWN_TIMEOUT_SECS = 30
+
+    MAXIMUM_CONCURRENT_CONNECTIONS = 1000
 
     def __init__(self, config, wdir, aux_dir):
         """Initialize instance.
@@ -83,6 +84,8 @@ class Launcher:
         self.local_address = None
         self.local_export_address = None
         self.iface_task = None
+
+        self.connection_sem = asyncio.Semaphore(Launcher.MAXIMUM_CONCURRENT_CONNECTIONS)
 
     def set_job_finish_callback(self, jobs_finish_cb, *jobs_finish_cb_args):
         """Set default function for notifing about finished jobs.
@@ -151,18 +154,20 @@ class Launcher:
 
         agent = self.nodes[agent_id]
 
-        socket_open_attempts = 0
-        while True:
-            try:
-                out_socket = self.zmq_ctx.socket(zmq.REQ) #pylint: disable=maybe-no-member
-                break
-            except ZMQError:
-                if socket_open_attempts > 5:
-                    raise Exception('failed to communicate with agent - too many connections in the same time')
-                await asyncio.sleep(0.1)
-                socket_open_attempts += 1
-
+        await self.connection_sem.acquire()
         try:
+            socket_open_attempts = 0
+            while True:
+                try:
+                    out_socket = self.zmq_ctx.socket(zmq.REQ) #pylint: disable=maybe-no-member
+                    break
+                except zmq.ZMQError:
+                    _logger.info('too many connections while communicating with launcher agent')
+                    if socket_open_attempts > 5:
+                        raise Exception('failed to communicate with agent - too many connections in the same time')
+                    await asyncio.sleep(0.1)
+                    socket_open_attempts += 1
+
             out_socket.connect(agent['address'])
 
             await out_socket.send_json({
@@ -194,6 +199,8 @@ class Launcher:
                 except Exception:
                     # ignore errors in this place
                     pass
+
+            self.connection_sem.release()
 
     async def cancel(self, agent_id, app_id):
         """Cancel sumited application by the selected agent.
@@ -312,7 +319,7 @@ class Launcher:
             if agent.get('process', None):
                 _logger.debug('killing agent %s ...', agent_id)
                 try:
-                    await asyncio.wait_for(agent['process'].wait(), 5)
+                    await asyncio.wait_for(agent['process'].wait(), 30)
                     agent['process'] = None
                 except Exception:
                     _logger.warning('Failed to kill agent: %s', str(sys.exc_info()))

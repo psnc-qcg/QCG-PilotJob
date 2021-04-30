@@ -81,7 +81,6 @@ class SlurmExecution(ExecutionSchema):
     }
 
     def _preprocess_common(self, ex_job):
-
         if ex_job.job_execution.stdin:
             ex_job.job_execution.args.extend(["-i", os.path.join(ex_job.wd_path, ex_job.job_execution.stdin)])
             ex_job.job_execution.stdin = None
@@ -101,7 +100,6 @@ class SlurmExecution(ExecutionSchema):
         if self.resources.binding:
             ex_job.env.update({'QCG_PM_CPU_SET': ','.join([str(c) for c in sum(
                 [alloc.cores for alloc in ex_job.allocation.nodes], [])])})
-
 
     def _preprocess_threads(self, ex_job):
         """Prepare execution description for threads execution model.
@@ -198,6 +196,7 @@ class SlurmExecution(ExecutionSchema):
                         rank_id = rank_id + 1
 
             mpi_args = [
+                '--mca rmaps_rank_file_physical 1',
                 '--rankfile',
                 str(rank_file),
             ]
@@ -306,15 +305,19 @@ class SlurmExecution(ExecutionSchema):
         Args
             ex_job (ExecutionJob): execution job iteration data
         """
-        job_model = ex_job.job_execution.model or 'default'
+        # as the single core jobs are launched directly by the agent or locally without slurm interaction
+        # this preprocess should be executed only for parallel jobs
+        if len(ex_job.allocation.nodes) != 1 or ex_job.allocation.nodes[0].ncores != 1:
+            job_model = ex_job.job_execution.model or 'default'
 
-        _logger.debug(f'looking for job model {job_model}')
-        preprocess_method = SlurmExecution.JOB_MODELS.get(job_model)
-        if not preprocess_method:
-            raise InternalError(f"unknown job execution model '{job_model}'")
+            _logger.debug(f'looking for job model {job_model}')
 
-        method = getattr(self, preprocess_method)
-        method(ex_job)
+            preprocess_method = SlurmExecution.JOB_MODELS.get(job_model)
+            if not preprocess_method:
+                raise InternalError(f"unknown job execution model '{job_model}'")
+
+            method = getattr(self, preprocess_method)
+            method(ex_job)
 
 
 class DirectExecution(ExecutionSchema):

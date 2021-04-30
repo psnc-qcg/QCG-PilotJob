@@ -181,12 +181,11 @@ class PartitionManager:
                             '--slurm-limit-nodes-range-end', str(self.end_node)]
 
             for arg in [Config.ZMQ_PORT_MIN_RANGE, Config.ZMQ_PORT_MAX_RANGE, Config.REPORT_FORMAT,
-                    Config.LOG_LEVEL, Config.OPENMPI_MODEL_MODULE]:
+                    Config.LOG_LEVEL, Config.OPENMPI_MODEL_MODULE, Config.WRAPPER_RT_STATS]:
                 if self.config.get(arg, None) is not None:
                     manager_args.extend([arg.value['cmd_opt'], str(self.config.get(arg))])
 
-            for arg in [Config.SYSTEM_CORE, Config.DISABLE_NL, Config.ENABLE_PROC_STATS, Config.ENABLE_RT_STATS,
-                        Config.WRAPPER_RT_STATS]:
+            for arg in [Config.SYSTEM_CORE, Config.DISABLE_NL, Config.ENABLE_PROC_STATS, Config.ENABLE_RT_STATS]:
                 if self.config.get(arg, False):
                     manager_args.append(arg.value['cmd_opt'])
 
@@ -215,7 +214,7 @@ class PartitionManager:
         if self.process:
             try:
                 _logger.info(f'terminating partition manager {self.mid} @ {self.start_node}')
-                await terminate_subprocess(self.process, f'partition-manager-{self.mid}', 10)
+                await terminate_subprocess(self.process, f'partition-manager-{self.mid}', 30)
                 _logger.info(f'partition manager {self.mid} @ {self.start_node} terminated')
             except Exception as exc:
                 _logger.warning(f'failed to terminate partition manager {self.mid} @ {self.start_node}: {str(exc)}')
@@ -322,9 +321,9 @@ class ManagerInstance:
             await asyncio.wait_for(self.get_socket().send_json({
                 'request': 'control',
                 'command': ControlReq.REQ_CONTROL_CMD_FINISHAFTERALLTASKSDONE
-                }), timeout=2.0)
+                }), timeout=10.0)
 
-            msg = await asyncio.wait_for(self.get_socket().recv_json(), timeout=2.0)
+            msg = await asyncio.wait_for(self.get_socket().recv_json(), timeout=10.0)
 
             if not msg['code'] == 0:
                 raise InvalidRequest(
@@ -432,7 +431,7 @@ class GovernorManager:
 
         self._schedule_buffered_jobs_task = None
 
-        self._wait_for_register_timeout = 20
+        self._wait_for_register_timeout = 60
 
         self.start_time = datetime.now()
 

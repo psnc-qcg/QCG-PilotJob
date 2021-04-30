@@ -151,7 +151,7 @@ def jobs(wdir, state, node, core, sort, details, verbose):
     def job_filter(job_data):
         ok = True
         if ok and state and job_data.get('state', '').lower() != state.lower():
-            print(f'searched state {state} does not match job state {job_data.get("state")}')
+#            print(f'searched state {state} does not match job state {job_data.get("state")}')
             ok = False
         if ok and (node or core):
             job_nodes = job_data.get('nodes', {})

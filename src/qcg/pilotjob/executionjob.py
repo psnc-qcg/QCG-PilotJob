@@ -46,7 +46,6 @@ class ExecutionJob:
 
     SIG_KILL_TIMEOUT = 10 # in seconds
 
-    @profile
     def __init__(self, executor, envs, allocation, job_iteration):
         """Initialize instance.
 
@@ -194,7 +193,6 @@ class ExecutionJob:
         self._executor.job_iteration_started(self)
         self.job_iteration.job.append_runtime({'wd': self.wd_path}, iteration=self.job_iteration.iteration)
 
-    @profile
     async def launch(self):
         """The function for launching process of job iteration"""
         raise NotImplementedError('This method must be implemened in subclass')
@@ -248,7 +246,6 @@ class LocalSchemaExecutionJob(ExecutionJob):
         _schema (ExecutionSchmea): execution schema instance
     """
 
-    @profile
     def __init__(self, executor, envs, allocation, job_iteration, schema):
         """Initialize instance.
 
@@ -339,7 +336,6 @@ class LocalSchemaExecutionJob(ExecutionJob):
             except Exception as exc:
                 _logger.error(f"cleanup failed: {str(exc)}")
 
-    @profile
     async def launch(self):
         """Create asynchronous task to launch job iteration"""
         asyncio.ensure_future(self._execute_local_process())
@@ -428,7 +424,6 @@ class LauncherExecutionJob(ExecutionJob):
             await cls.launcher.stop()
             cls.launcher = None
 
-    @profile
     def __init__(self, executor, envs, allocation, job_iteration, schema):
         """Initialize instance.
 
@@ -452,7 +447,6 @@ class LauncherExecutionJob(ExecutionJob):
         self._schema.preprocess(self)
         super().preprocess()
 
-    @profile
     async def launch(self):
         """Submit job to the specific launcher agent."""
         jexec = self.job_execution

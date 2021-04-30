@@ -6,6 +6,7 @@ import socket
 import json
 import psutil
 import random
+import getpass
 from datetime import datetime
 from os.path import join
 import threading
@@ -433,7 +434,7 @@ async def start_agent(agent_id, raddress, options):
         if enable_rt_stats:
             _logger.info('gathering launch statistics enabled')
 
-            fifo_path = f'/tmp/qcg_rt_pipe.{random.randrange(1000)}'
+            fifo_path = f'/tmp/qcg_rt_pipe_{getpass.getuser()}.{random.randrange(1000)}'
             if os.path.exists(fifo_path):
                 os.unlink(fifo_path)
 

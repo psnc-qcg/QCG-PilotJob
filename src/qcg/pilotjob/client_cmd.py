@@ -51,11 +51,11 @@ def get_address_from_arg(address):
 
     if not re.match('\w*://', result):
         # append default protocol
-        result = "%s://%s" % (CmdConnect.DEFAULT_PROTO, result)
+        result = "%s://%s" % (DEFAULT_PROTO, result)
 
     if not re.match('.*:\d+', result):
         # append default port
-        result = "%s:%s" % (result, CmdConnect.DEFAULT_PORT)
+        result = "%s:%s" % (result, DEFAULT_PORT)
 
     return result
 
