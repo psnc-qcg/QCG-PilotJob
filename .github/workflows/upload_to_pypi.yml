@@ -4,8 +4,7 @@
 name: Upload Python Package to PyPi
 
 on:
-  release:
-    types: [push]
+  push:
 
 jobs:
   deploy:
