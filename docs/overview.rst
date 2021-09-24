@@ -10,7 +10,7 @@ jobs can be restricted or even forbidden by administrative policies
 defined on clusters. One can argue that there are available job array
 mechanisms in many systems, however the traditional job array mechanism
 allows to run only bunch of jobs having the same resource requirements
-while jobs being parts of a multiscale simulation by nature vary in
+while jobs being parts of larger workflows by nature vary in
 requirements and therefore need more flexible solutions.
 
 The core component of QCG-PilotJob system is QCG-PilotJob Manager.
@@ -33,3 +33,13 @@ To allow user's to test their scenarios, QCG-PilotJob Manager
 supports *local* execution mode, in which all job's are executed on
 local machine and doesn't require any scheduling system allocation.
 
+Components
+----------
+QCG-PilotJob consists of three components:
+
+QCG-PilotJob Core
+    the essential part of the software, provides all basic mechanism needed to use QCG-PilotJob
+QCG-PilotJob Command Line Tools
+    a set of command line tools for reporting and analysis of QCG-PilotJob execution
+QCG-PilotJob Executor API
+    an alternative, simplified API for QCG-PilotJob

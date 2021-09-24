@@ -32,12 +32,14 @@ services:
     command: ["slurmctld"]
     container_name: slurmctld
     hostname: slurmctld
+    environment:
+        LANG: en_US.utf8
     volumes:
       - etc_munge:/etc/munge
       - etc_slurm:/etc/slurm
       - slurm_jobdir:/data
       - var_log_slurm:/var/log/slurm
-      - "$QCG_PM_REPO_DIR/src:/srv/src"
+      - "$QCG_PM_REPO_DIR/components/core:/srv/src"
     expose:
       - "6817"
     depends_on:
@@ -48,12 +50,14 @@ services:
     command: ["slurmd"]
     hostname: c1
     container_name: c1
+    environment:
+        LANG: en_US.utf8
     volumes:
       - etc_munge:/etc/munge
       - etc_slurm:/etc/slurm
       - slurm_jobdir:/data
       - var_log_slurm:/var/log/slurm
-      - "$QCG_PM_REPO_DIR/src:/srv/src"
+      - "$QCG_PM_REPO_DIR/components/core:/srv/src"
     expose:
       - "6818"
     depends_on:
@@ -65,12 +69,14 @@ services:
     command: ["slurmd"]
     hostname: c2
     container_name: c2
+    environment:
+        LANG: en_US.utf8
     volumes:
       - etc_munge:/etc/munge
       - etc_slurm:/etc/slurm
       - slurm_jobdir:/data
       - var_log_slurm:/var/log/slurm
-      - "$QCG_PM_REPO_DIR/src:/srv/src"
+      - "$QCG_PM_REPO_DIR/components/core:/srv/src"
     expose:
       - "6818"
     depends_on:

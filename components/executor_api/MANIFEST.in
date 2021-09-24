@@ -1,0 +1,2 @@
+include versioneer.py
+include qcg/pilotjob/executor_api/_version.py

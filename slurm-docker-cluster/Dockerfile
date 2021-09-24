@@ -12,7 +12,7 @@ ARG GOSU_VERSION=1.11
 RUN set -ex \
     && yum makecache fast \
     && yum -y update \
-    && yum -y install https://centos7.iuscommunity.org/ius-release.rpm \
+    && yum -y install https://repo.ius.io/ius-release-el7.rpm \
     && yum -y install epel-release \
     && yum -y install \
        wget \

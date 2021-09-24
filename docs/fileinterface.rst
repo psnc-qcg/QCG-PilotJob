@@ -51,9 +51,9 @@ descriptions of jobs.
 The Job description is a dictionary with the following keys:
 
 - ``name`` (*required*) ``String`` - job name, must be unique among all other submitted jobs
-- ``iteration`` (*optional*) ``Dict`` - defines a loop for iterative jobs, the *start* (*optional*)
-  and *stop* keys must be defined; the total number of iterations will be *stop - start*
-  (the last index of the sub-job will be *stop - 1*)
+- ``iteration`` (*optional*) ``Dict`` - defines a loop for iterative jobs, the either *start* (*optional*)
+  and *stop* or *values* keys must be defined; the total number of iterations will be *stop - start*
+  (the last index of the sub-job will be *stop - 1*) in case of boundary definition or lenght of *values* array
 - ``execution`` (*required*) ``Dict`` - execution description with the following keys:
 
   - ``exec`` (*optional*) ``String`` - executable name (if available in *$PATH*) or absolute path to the executable,

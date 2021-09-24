@@ -1,7 +1,5 @@
 # QCG-PilotJob
-The QCG-PilotJob service for execution of many computing tasks inside one allocation
-=======
-# QCG-PilotJob v 0.11.2
+Flexible service for execution of many computing tasks inside one allocation
 
 
 Author: Piotr Kopta <pkopta@man.poznan.pl>, Tomasz Piontek <piontek@man.poznan.pl>, Bartosz Bosak <bbosak@man.poznan.pl>
@@ -18,7 +16,7 @@ One can argue that there are available job array mechanisms in many systems, how
 mechanism allows to run only bunch of jobs having the same resource requirements while jobs being parts of 
 a multiscale simulation by nature vary in requirements and therefore need more flexible solutions.
 
-The core component of QCG-PilotJob system is QCG-PilotJob Manager.
+The core element of QCG-PilotJob system is QCG-PilotJob Manager.
 From the scheduling system perspective, QCG-PilotJob Manager, is seen as
 a single job inside a single user allocation. It means that QCG-PilotJob Manager controls an execution
 of a complex experiment consisting of many
@@ -37,13 +35,35 @@ submitted jobs during the run-time.
 To allow user's to test their scenarios, QCG-PilotJob Manager supports *local* execution mode, in which all job's 
 are executed on local machine and doesn't require any scheduling system allocation.
 
+## Components
+QCG-PilotJob consists of three components:
+* **QCG-PilotJob Core** - the essential part of the software, provides all basic mechanism needed to use QCG-PilotJob
+* **QCG-PilotJob Command Line Tools** - a set of command line tools for reporting and analysis of QCG-PilotJob execution
+* **QCG-PilotJob Executor API** - an alternative, simplified API for QCG-PilotJob
+
 ## Documentation
 The documentation of the QCG-PilotJob system is available at https://qcg-pilotjob.readthedocs.org
 
-## Installation
-The latest stable version of QCG-PilotJob can be installed with pip
+## Installation with pip
+
+The latest stable version of QCG-PilotJob Core can be installed with pip
 
 ```bash
 $ pip install qcg-pilotjob
 ```
 
+The supplementary packages can be installed analogously:
+
+```bash
+$ pip install qcg-pilotjob-cmds
+$ pip install qcg-pilotjob-executor-api
+```
+
+## Installation from sources
+
+The individual QCG-PilotJob components are located in separate directories. In 
+ order to install particular component, you need to `cd` to respective component's directory and then call `pip install .`, e.g.:
+```bash
+$ cd components/core
+$ pip install .
+```

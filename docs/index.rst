@@ -11,14 +11,14 @@ A python service for easy execution of many tasks inside a single allocation.
    :members:
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Basics
 
    overview
    installation
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Usage
 
    examples
@@ -27,24 +27,26 @@ A python service for easy execution of many tasks inside a single allocation.
    options
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Further reading
 
    concepts
    execution_environments
    execution_models
    fileinterface
+   executor_api
    resourceschedulers
    resume
    performance_tools
    performance_tuning
    processes
+   logs
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Miscellaneous
 
-   logs
+   faq
    dictionary
 
 .. toctree::
@@ -52,6 +54,7 @@ A python service for easy execution of many tasks inside a single allocation.
    :caption: API Docs
 
    api/qcg.pilotjob.api
+   api/qcg.pilotjob.executor_api
 
 
 

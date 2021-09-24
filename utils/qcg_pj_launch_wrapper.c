@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <string.h>
+#include <signal.h>
 
 
 #define DEBUG 0
@@ -51,6 +52,7 @@ int main(int argc, char **argv) {
         }
 
         child_exitcode = WEXITSTATUS(child_status);
+		signal(SIGPIPE, SIG_IGN);
 
 		if (debug_v) {
 			fprintf(stderr, "child job finished with %d exit code\n", child_exitcode);

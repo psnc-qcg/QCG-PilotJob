@@ -13,9 +13,13 @@
 import os
 import sys
 import glob
-sys.path.insert(0, os.path.abspath('.'))
-sys.path.insert(0, os.path.abspath('../src'))
+import shutil
+from distutils.dir_util import copy_tree
 
+sys.path.insert(0, os.path.abspath('..'))
+sys.path.insert(0, os.path.abspath('../components/core'))
+sys.path.insert(0, os.path.abspath('../components/cmds'))
+sys.path.insert(0, os.path.abspath('../components/executor_api'))
 
 # -- Project information -----------------------------------------------------
 
@@ -24,7 +28,6 @@ copyright = '2021, Piotr Kopta, Tomasz Piontek & Bartosz Bosak'
 author = 'Piotr Kopta, Tomasz Piontek & Bartosz Bosak'
 html_logo = 'images/qcg-pj-logo.png'
 master_doc = 'index'
-
 
 # -- General configuration ---------------------------------------------------
 
@@ -40,16 +43,31 @@ extensions = [
 ]
 
 
-apidoc_module_dir = '../src'
+apidoc_tmpdir = './.apidoc-tmpdir'
+
+apidoc_module_dir = f'{apidoc_tmpdir}/qcg'
 apidoc_separate_modules = True
 apidoc_module_first = True
+apidoc_extra_args = ['--implicit-namespaces']
 
-excluded_files1 = glob.glob(apidoc_module_dir + "/qcg/pilotjob/*.py")
-excluded_files2 = glob.glob(apidoc_module_dir + "/*.py")
-excluded_files = excluded_files1 + excluded_files2
-excluded_files.remove(apidoc_module_dir + '/qcg/pilotjob/__init__.py')
-excluded_paths = ['qcg/pilotjob/launcher', 'qcg/pilotjob/tests', 'qcg/pilotjob/utils']
-apidoc_excluded_paths = excluded_paths + excluded_files
+excluded_paths = []
+componenents_dir = '../components'
+
+#create temporary dir for apidoc
+shutil.rmtree(apidoc_tmpdir, ignore_errors=True)
+os.mkdir(apidoc_tmpdir)
+
+globbed = []
+#copy all components to apidoc_tmpdir
+for c in ['executor_api', 'core', 'cmds']:
+    copy_tree(f'{componenents_dir}/{c}/qcg', f'{apidoc_tmpdir}/qcg')
+
+excluded_paths.extend(glob.glob(f'{apidoc_tmpdir}/qcg/pilotjob/*.py'))
+excluded_paths.append(f'{apidoc_tmpdir}/qcg/pilotjob/launcher')
+excluded_paths.append(f'{apidoc_tmpdir}/qcg/pilotjob/tests')
+excluded_paths.append(f'{apidoc_tmpdir}/qcg/pilotjob/utils')
+
+apidoc_excluded_paths = excluded_paths
 autodoc_member_order = 'bysource'
 autoclass_content = 'both'
 
