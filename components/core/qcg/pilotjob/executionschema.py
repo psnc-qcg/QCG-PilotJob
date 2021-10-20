@@ -127,6 +127,7 @@ class SlurmExecution(ExecutionSchema):
         ex_job.job_execution.args = [
             "-n", "1",
             "--cpus-per-task", str(ex_job.ncores),
+            "--overlap",
             "--overcommit",
             "--mem-per-cpu=0",
             cpu_bind]
@@ -220,12 +221,12 @@ class SlurmExecution(ExecutionSchema):
 
         if top_logger.level == logging.DEBUG:
             ex_job.env.update({'I_MPI_HYDRA_BOOTSTRAP_EXEC_EXTRA_ARGS':
-                                   '-vvvvvv --overcommit --oversubscribe --cpu-bind=none --mem-per-cpu=0'})
+                                   '-vvvvvv --overcommit --overlap --oversubscribe --cpu-bind=none --mem-per-cpu=0'})
             ex_job.env.update({'I_MPI_HYDRA_DEBUG': '1'})
             ex_job.env.update({'I_MPI_DEBUG': '5'})
         else:
             ex_job.env.update({'I_MPI_HYDRA_BOOTSTRAP_EXEC_EXTRA_ARGS':
-                                   '-v --overcommit --oversubscribe --mem-per-cpu=0'})
+                                   '-v --overcommit --overlap --oversubscribe --mem-per-cpu=0'})
 
         if ex_job.job_execution.model_opts.get('mpirun_args'):
             mpi_args.extend(ex_job.job_execution.model_opts['mpirun_args'])
@@ -263,6 +264,7 @@ class SlurmExecution(ExecutionSchema):
         ex_job.job_execution.exec = 'srun'
         ex_job.job_execution.args = [
             "-n", str(ex_job.ncores),
+            "--overlap",
             "--overcommit",
             "--mem-per-cpu=0",
             "-m", "arbitrary",
