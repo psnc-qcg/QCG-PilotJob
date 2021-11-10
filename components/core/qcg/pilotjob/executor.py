@@ -99,6 +99,7 @@ class Executor:
             job_iteration (SchedulingIteration): job iteration execution details
         """
         try:
+            _logger.info(f'start executing {job_iteration.name}')
             job_iteration.job.append_runtime({'allocation': allocation.description()}, job_iteration.iteration)
 
             try:
@@ -111,6 +112,7 @@ class Executor:
             finally:
                 self._manager.queued_to_execute -= 1
 
+            _logger.info(f'executed {job_iteration.name}')
             await execution_job.run()
         except Exception as exc:
             if not self._manager.stop_processing and Config.PROGRESS.get(self._config):

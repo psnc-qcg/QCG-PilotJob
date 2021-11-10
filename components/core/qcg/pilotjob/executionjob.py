@@ -455,6 +455,7 @@ class LauncherExecutionJob(ExecutionJob):
         jexec = self.job_execution
         node = self.allocation.nodes[0]
 
+        _logger.info(f'sending {self.job_iteration.name} to agent {node.node.name} ...')
         await self.__class__.launcher.submit(node.node.name,
                                              self.jid,
                                              self.job_iteration.name,

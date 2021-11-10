@@ -104,10 +104,22 @@ class Agent:
 
         self.local_port = self.in_socket.bind_to_random_port(laddr, min_port=min_port, max_port=max_port)
         self.local_address = '{}:{}'.format(laddr, self.local_port)
-        self.local_export_address = '{}://{}:{}'.format(proto, socket.gethostbyname(socket.gethostname()),
-                                                        self.local_port)
 
-        _logger.debug('agent with id (%s) listen at address (%s), export address (%s)',
+        local_hostname = socket.gethostname()
+
+        if os.getenv('SLURM_CLUSTER_NAME', 'unknown') == 'supermucng':
+            _logger.info(f'modifing agent export address for supermucng')
+            local_opa_hostname='.'.join(elem + '-opa' if it == 0 else elem for it,elem in enumerate(local_hostname.split('.')))
+            _logger.info(f'local hostname: {local_hostname}')
+            _logger.info(f'local modified hostname: {local_opa_hostname}')
+
+            _logger.info(f'local hostname ip address: {socket.gethostbyname(local_hostname)}')
+            _logger.info(f'local modified hostname ip address: {socket.gethostbyname(local_opa_hostname)}')
+            local_hostname = local_opa_hostname
+
+        self.local_export_address = '{}://{}:{}'.format(proto, socket.gethostbyname(local_hostname), self.local_port)
+
+        _logger.info('agent with id (%s) listen at address (%s), export address (%s)',
                       self.agent_id, self.local_address, self.local_export_address)
 
         try:

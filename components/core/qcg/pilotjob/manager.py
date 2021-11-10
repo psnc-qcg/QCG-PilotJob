@@ -608,6 +608,7 @@ class DirectManager:
                                         _logger.debug("found resources for job %s", job_iteration.name)
 
                                         # allocation has been created - execute job
+                                        _logger.info(f'scheduled {job_iteration.name} on {allocation.nodes[0].node.name}')
                                         self.change_job_state(sched_job.job, iteration=job_iteration.iteration,
                                                               state=JobState.SCHEDULED)
 
