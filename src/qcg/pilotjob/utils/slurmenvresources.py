@@ -3,7 +3,7 @@ import sys
 import traceback
 
 from os.path import exists
-from qcg.pilotjob.slurmres import test_environment
+from qcg.pilotjob.executor.slurmres import test_environment
 
 class SlurmEnvResources:
 

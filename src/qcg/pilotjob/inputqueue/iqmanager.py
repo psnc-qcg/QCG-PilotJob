@@ -1,139 +1,11 @@
-import json
-import uuid
 import logging
 
-from datetime import datetime
-from string import Template
-
-from qcg.pilotjob.errors import InvalidRequest, JobAlreadyExist, IllegalJobDescription
-from qcg.pilotjob.inputqueue.jobdesc import JobDescription, JobResources
+from qcg.pilotjob.common.errors import IllegalJobDescription
 from qcg.pilotjob.inputqueue.job import Job, JobState
 from qcg.pilotjob.inputqueue.jobdb import job_db
-from qcg.pilotjob.response import Response
+from qcg.pilotjob.inputqueue.publisher import Publisher, EventTopic
 
 
-class RequestHandler:
-    """Base class for request handlers.
-    All child classes should define two attributes:
-        - requests (list(str)): list of request names they are supporting
-        - handler_prefix (str): prefix for handler methods
-    All supported request handler should define a method with name as:
-        {handler_prefix}{request_name}
-    """
-
-    def is_supported(self, request_name):
-        return request_name in getattr(self, 'requests')
-
-    def get_handler(self, request_name):
-        return getattr(self, f'{getattr(self, "handler_prefix")}{request_name}')
-
-
-class IQReceiver(RequestHandler):
-    """InputQueue interface handler"""
-
-    # supported request names
-    requests = [
-        'submit_job',
-        'job_info',
-        'list_jobs',
-        'list_executors',
-        'finish',
-        'stats',
-        'notify',
-        'register_executor',
-        'iterations_finished',
-        'executor_heartbeat',
-        'reserve_iterations',
-    ]
-
-    # prefix of handler functions
-    handler_prefix = 'handle_'
-
-    def __init__(self, iqmanager):
-        self.iqmanager = iqmanager
-
-    def handle_submit_job(self, request):
-        """Handle `submit_job` request.
-
-        Args:
-            request (dict): request data, must contain `jobs` key with list of jobs to submit
-
-        Raises:
-            InvalidJobRequest - in case of missing some key attributes
-            InvalidJobDescription - in case of wrong format of jobs description
-        """
-        if 'jobs' not in request or not isinstance(request.get('jobs'), list):
-            raise InvalidRequest(f'Wrong format of `submit_job` request')
-
-        job_vars = {
-            'sdate': str(datetime.now()),
-            'jname': None,
-            'uniq': None
-        }
-
-        new_jobs = {}
-        for input_job_desc in request.get('jobs'):
-            job_vars['uniq'] = str(uuid.uuid4())
-
-            # default job name
-            input_job_desc.setdefault('name', job_vars['uniq'])
-
-            job_vars['jname'] = input_job_desc.get('name')
-
-            # replace variables and parse job description
-            job_desc = JobDescription(**json.loads(Template(json.dumps(input_job_desc)).safe_substitute(job_vars)))
-
-            # default parameters
-            if not job_desc.resources:
-                job_desc.resources = JobResources(cores={'exact': 1})
-
-            # validate job description
-            job_desc.validate()
-
-            # validate uniqness of job name
-            if job_db.exist(job_desc.name) or job_desc.name in new_jobs:
-                raise JobAlreadyExist(f'Job {job_desc.name} already exists')
-
-            new_jobs[job_desc.name] = Job(description=job_desc)
-
-        self.iqmanager.enqueue_jobs(new_jobs.values())
-
-        response_data = {
-            'submitted': len(new_jobs),
-            'jobs': list(new_jobs.keys())
-        }
-
-        return Response.ok(f'{len(new_jobs)} submitted', data=response_data)
-
-    def handle_job_info(self, request):
-        pass
-
-    def handle_list_jobs(self, request):
-        pass
-
-    def handle_list_executors(self, request):
-        pass
-
-    def handle_finish(self, request):
-        pass
-
-    def handle_stats(self, request):
-        pass
-
-    def handle_notify(self, request):
-        pass
-
-    def handle_register_executor(self, request):
-        pass
-
-    def handle_iterations_finished(self, request):
-        pass
-
-    def handle_executor_heartbeat(self, request):
-        pass
-
-    def handle_reserve_iterations(self, request):
-        pass
 
 
 class IQScheduledJob:
@@ -211,6 +83,8 @@ class IQScheduledJob:
         # compute minimum resources size
         self.min_res_cores = job.description.resources.get_min_num_cores()
         self.min_res_node_cores = job.description.resources.get_min_node_num_cores()
+        self.min_res_nodes = job.description.resources.get_min_nodes()
+
         logging.debug(f'minimum # of cores for job {self.job.get_name()} is {self.min_res_cores}, '
                       f'per node {self.min_res_node_cores}')
 
@@ -398,25 +272,45 @@ class ReadyIterations:
         self.job = job
         self.iterations = set(iterations)
 
-    def get_ready_iterations(self, max_iterations, min_cpu_cores, min_node_cpu_cores):
-        """Return iterations ready to execute.
+    def allocate_max_cores(self, max_cores):
+        """Allocate iterations.
+        This method will return AND remove from `self.iterations` set of iterations that altogether requires
+        `max_cores`.
 
         Args:
-            max_iterations (int): maximum number of iterations to return
-            min_cpu_cores (int): minimum number of cores per iteration
-            min_node_cpu_cores (int): minimum number of cores per node per iteration
+            max_cores (int): the maximum total number of cores required by all allocated iterations
 
         Return:
-            list(int): list with ready iterations that meets requirements or None if there is no
-                ready iteration that meets requirement
+            list(int), int: a pair with set of iteration indexes and total number of required cores by all iterations
+                (in result set)
         """
-        # TODO
-        return None
+        alloc_cores = min(len(self.iterations) * self.job.min_res_cores, max_cores)
+        alloc_iters = int(alloc_cores / self.job.min_res_cores)
+
+        print(f'allocate_max_cores ({max_cores}) for job ({self.job.job.get_name()}): '
+              f'len_iterations({len(self.iterations)}), '
+              f'job_min_res_cores({self.job.min_res_cores}), alloc_cores({alloc_cores}), '
+              f'alloc_iters({alloc_iters})')
+        return [self.iterations.pop() for _ in range(alloc_iters)], alloc_iters * self.job.min_res_cores
+
+    def has_iterations(self):
+        """Check if there are any ready iterations.
+
+        Returns:
+            int: number of ready iterations
+        """
+        return len(self.iterations)
 
 
 class IQManager:
 
-    def __init__(self):
+    def __init__(self, config):
+        """The Input queue manager class queues all incoming job submit requests and governs job dependencies.
+        All ready job iterations (without dependencies or with all dependencies met) are stored in `ready_iterations`
+        map and are available for executors. To properly manage job dependencies, the `IQManager` must be notified
+        about all finished job iterations via `job_finished` method.
+        """
+
         # a list of jobs with not fully met dependencies
         self.non_ready_jobs = dict()
 
@@ -426,12 +320,113 @@ class IQManager:
         # a map with job names that are defined as dependencies and list of jobs that depends on them
         self.tracked_jobs = dict()
 
+        # a map of executors
+        self.executors = dict()
+
+        # an event publisher
+        self.event_publisher = Publisher()
+        self.event_publisher.setup(config)
+
+    def stop(self):
+        logging.info('stopping iq manager')
+        self.event_publisher.stop()
+
+    def register_executor(self, executor):
+        if executor.name in self.executors:
+            logging.warning(f'executor {executor.name} already registered - overwriting')
+
+        self.executors[executor.name] = executor
+
+    def executor_heartbeat(self, executor_name):
+        executor = self.executors.get(executor_name)
+        if not executor:
+            logging.warning(f'executor {executor_name} not known')
+            return
+
+        executor.heart_beat()
+
+    def manager_info(self):
+        return {
+            'ready_its': len(self.ready_iterations),
+            'events': self.event_publisher.external_address
+        }
+
+    def executor_reserve_jobs(self, executor_name, allocation=dict()):
+        executor = self.executors.get(executor_name)
+        if not executor:
+            logging.warning(f'executor {executor_name} not known')
+
+        ex_res = executor.resources
+        max_cores = allocation.get('max_cores', ex_res.get('total_cpus'))
+
+        reserved_iterations, _ = self.get_ready_iterations(max_cores,
+                                                           ex_res.get('total_cpus'),
+                                                           ex_res.get('node_max_cpus'),
+                                                           ex_res.get('total_nodes'))
+
+        jobs_to_execute = []
+        for scheduled_job, iteration_list in reserved_iterations.items():
+            jobs_to_execute.append({'job': scheduled_job.job.description.to_dict(),
+                                    'iterations': iteration_list})
+
+        logging.info(f'reserved for executor {executor_name} iterations {reserved_iterations}')
+        executor.append_allocation(reserved_iterations)
+        return jobs_to_execute
+
+    def get_ready_iterations(self, max_cores, max_cpu_cores, max_node_cpu_cores, max_nodes):
+        """Return iterations ready to execute.
+
+        Args:
+            max_cores (int): maximum number of cores the all iterations should require
+            max_cpu_cores (int): maximum number of cores per single iteration
+            max_node_cpu_cores (int): maximum number of cores per node per iteration
+            max_nodes (int): maximum number of nodes per iteration
+
+        Return:
+            list(int): list with ready iterations that meets requirements or None if there is no
+                ready iteration that meets requirement
+        """
+        rest_cores = max_cores
+        allocation = {}
+        empty_its = []
+
+        for jname, ready_its in self.ready_iterations.items():
+            print(f'comparing required max_cpu_cores({max_cpu_cores}), max_node_cpu_cores({max_node_cpu_cores})'
+                          f', max_nodes({max_nodes}) with job\'s min_res_cores({ready_its.job.min_res_cores}), '
+                          f'min_res_node_cores({ready_its.job.min_res_node_cores}), '
+                          f'min_res_nodes({ready_its.job.min_res_nodes})')
+            if all((max_cpu_cores >= ready_its.job.min_res_cores,
+                    max_node_cpu_cores >= ready_its.job.min_res_node_cores,
+                    max_nodes >= ready_its.job.min_res_nodes)):
+                print('ok')
+                core_list, alloc_cores = ready_its.allocate_max_cores(rest_cores)
+
+                allocation[ready_its.job] = core_list
+                print(f'allocated {alloc_cores} from job {ready_its.job.job.get_name()}')
+                rest_cores -= alloc_cores
+
+                if not ready_its.has_iterations() and jname not in self.non_ready_jobs:
+                    empty_its.append(jname)
+
+                if rest_cores == 0:
+                    break
+            else:
+                print('not match')
+
+        for jid in empty_its:
+            del self.ready_iterations[jid]
+
+        return allocation, max_cores - rest_cores
+
     def enqueue_jobs(self, jobs):
         """Add jobs to the input queue.
         Firstly, all job are added to the database. Then it's dependencies are checked and all
         ready iterations are putted to the ready iterations queue. For the non-ready iterations,
         the dependency tracking job is initialized, and after each tracked job status changed
         each job's dependencies are updated.
+
+        Args:
+            jobs (list(qcg.pilotjob.inputqueue.job.Job)): list of jobs to enqueue
         """
         # first add all jobs to the db to make sure all dependent jobs in current batch are in db
         for job in jobs:
@@ -453,6 +448,8 @@ class IQManager:
                 # put currently ready iterations to the `ready_iterations` map
                 self.ready_iterations[iq_job.job.get_name()] =\
                     ReadyIterations(iq_job, iq_job.get_initial_ready_iterations())
+                self.event_publisher.publish(topic=EventTopic.NEW_JOBS,
+                                             data={'ready_its': len(self.ready_iterations)})
 
                 # if job has not met dependencies, track jobs it depends on
                 if iq_job.has_dependencies():
@@ -480,6 +477,8 @@ class IQManager:
                     if newly_ready_iterations:
                         # update ready iterations for this job
                         self.ready_iterations[iq_job.job.get_name()].iterations.update(newly_ready_iterations)
+                        self.event_publisher.publish(topic=EventTopic.NEW_JOBS,
+                                                     data={'ready_its': len(self.ready_iterations)})
 
                     if newly_infeasible_iterations:
                         for infeasible_iteration in newly_infeasible_iterations:
@@ -504,6 +503,13 @@ class IQManager:
             logging.exception(f'unknown job {job_name}')
 
     def delete_tracked_job(self, tracked_job_name, iq_job):
+        """Delete tracking job entry.
+
+        Args:
+            tracked_job_name (str): the job name to stop tracking
+            iq_job (qcg.pilotjob.inputqueue.iqmanager.IQScheduledJob): the input queue job for which stop tracking job
+                iteration status changes.
+        """
         if tracked_job_name in self.tracked_jobs:
             self.tracked_jobs[tracked_job_name].remove(iq_job)
             if len(self.tracked_jobs[tracked_job_name]) == 0:

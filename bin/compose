@@ -1,4 +1,0 @@
-#!/bin/bash
-
-cd ../compose
-exec winpty.exe docker-compose "$@"

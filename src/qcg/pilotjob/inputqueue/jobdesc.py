@@ -1,8 +1,9 @@
 import json
 import re
+import logging
 
-from qcg.pilotjob.errors import IllegalJobDescription
-from qcg.pilotjob.resources import CRType
+from qcg.pilotjob.common.errors import IllegalJobDescription
+from qcg.pilotjob.common.resources import CRType
 from datetime import timedelta
 
 
@@ -11,7 +12,27 @@ class JobJSONEncoder(json.JSONEncoder):
         return obj.to_dict()
 
 
-class JobExecution:
+class JobSerializer:
+
+    def to_dict(self):
+        """Serialize object to dictionary
+
+        Returns:
+            dict(str): dictionary with object attributes
+        """
+        return {name: value.to_dict() if isinstance(value, JobSerializer) else value\
+                for name, value in self.__dict__.items()}
+
+    def to_json(self, **args):
+        """Serialize object to JSON description.
+
+        Returns:
+            JSON description of object.
+        """
+        return json.dumps(self.to_dict(), **args)
+
+
+class JobExecution(JobSerializer):
     """The execution element of job description.
 
     Attributes:
@@ -78,24 +99,8 @@ class JobExecution:
                 raise IllegalJobDescription("Execution environment must be an dictionary")
             self.env = self.env
 
-    def to_dict(self):
-        """Serialize resource size to dictionary
 
-        Returns:
-            dict(str): dictionary with resource size
-        """
-        return self.__dict__
-
-    def to_json(self, **args):
-        """Serialize ``execution`` element to JSON description.
-
-        Returns:
-            JSON description of ``execution`` element.
-        """
-        return json.dumps(self.to_dict(), **args)
-
-
-class ResourceSize:
+class ResourceSize(JobSerializer):
     """The resources size element used in job description when specified the number of required cores or nodes."""
 
     def __init__(self, exact=None, min=None, max=None, scheduler=None):
@@ -146,24 +151,8 @@ class ResourceSize:
                 (self.max is not None and self.max < 0):
             raise IllegalJobDescription("Negative number of resources")
 
-    def to_dict(self):
-        """Serialize resource size to dictionary
 
-        Returns:
-            dict(str): dictionary with resource size
-        """
-        return self.__dict__
-
-    def to_json(self, **args):
-        """Serialize resource size to JSON description.
-
-        Returns:
-         JSON description of resource size element.
-        """
-        return json.dumps(self.to_dict(), **args)
-
-
-class JobResources:
+class JobResources(JobSerializer):
     """The ```resources``` element of job description."""
 
     _wt_regex = re.compile(r'((?P<hours>\d+?)h)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?')
@@ -285,6 +274,21 @@ class JobResources:
 
         return min_cores
 
+    def get_min_nodes(self):
+        """Return minimum number of nodes job requires.
+
+        Returns:
+            int: minimum number of required nodes for the job.
+        """
+        min_nodes = 1
+        if self.nodes:
+            if self.nodes.is_exact():
+                min_nodes = self.nodes.exact
+            else:
+                min_nodes = self.nodes.range[0]
+
+        return min_nodes
+
     def validate(self):
         """Validate data correctness.
 
@@ -312,24 +316,7 @@ class JobResources:
                     raise IllegalJobDescription(f'Number of consumable resources {cr_type} must be greater than 0')
 
 
-    def to_dict(self):
-        """Serialize ``resource`` element of job description to dictionary
-
-        Returns:
-            dict(str): dictionary with ``resources`` element of job description
-        """
-        return self.__dict__
-
-    def to_json(self, **args):
-        """Serialize ``resource`` element of job description to JSON description.
-
-        Returns:
-            JSON description of ``resource`` element of job description.
-        """
-        return json.dumps(self.to_dict(), cls=JobJSONEncoder, **args)
-
-
-class JobDependencies:
+class JobDependencies(JobSerializer):
     """Runtime dependencies of job."""
 
     def __init__(self, after=None):
@@ -357,24 +344,8 @@ class JobDependencies:
         if not isinstance(self.after, list) or not all(isinstance(jname, str) for jname in self.after):
             raise IllegalJobDescription('Dependency task list must be an array of strings')
 
-    def to_dict(self):
-        """Serialize job's runtime dependencies
 
-        Returns:
-            dict(str): dictionary with job's runtime dependencies
-        """
-        return self.__dict__
-
-    def to_json(self, **args):
-        """Serialize job's runtime dependencies to JSON description.
-
-        Returns:
-            JSON description of job's runtime dependencies
-        """
-        return json.dumps(self.to_dict(), **args)
-
-
-class JobIteration:
+class JobIteration(JobSerializer):
     """The ``iteration`` element of job description."""
 
     def __init__(self, start=None, stop=None):
@@ -433,22 +404,6 @@ class JobIteration:
         if self.start >= self.stop:
             raise IllegalJobDescription("Job iteration stop greater or equal than start")
 
-    def to_dict(self):
-        """Serialize ``iteration`` element of job description
-
-        Returns:
-            dict(str): dictionary with ``iteration`` element of job description
-        """
-        return self.__dict__
-
-    def to_json(self, **args):
-        """Serialize ``iteration`` element of job description to JSON description.
-
-        Returns:
-            JSON description of ``iteration`` element of job description
-        """
-        return json.dumps(self.to_dict(), **args)
-
     def __str__(self):
         """Return string representation of ``iteration`` element of job description.
 
@@ -458,14 +413,30 @@ class JobIteration:
         return "{}-{}".format(self.start, self.stop)
 
 
-class JobDescription:
+class JobDescription(JobSerializer):
 
     def __init__(self, name, execution, resources=None, dependencies=None, iteration=None):
         self.name = name
-        self.execution = JobExecution(**execution)
-        self.resources = JobResources(**resources) if resources else None
-        self.dependencies = JobDependencies(**dependencies) if dependencies else None
-        self.iteration = JobIteration(**iteration) if iteration else None
+
+        try:
+            self.execution = JobExecution(**execution)
+        except Exception as exc:
+            raise IllegalJobDescription(f'illformed execution element: {str(exc)}')
+
+        try:
+            self.resources = JobResources(**resources) if resources else None
+        except:
+            raise IllegalJobDescription('illformed resource element')
+
+        try:
+            self.dependencies = JobDependencies(**dependencies) if dependencies else None
+        except:
+            raise IllegalJobDescription('illformed dependencies element')
+
+        try:
+            self.iteration = JobIteration(**iteration) if iteration else None
+        except:
+            raise IllegalJobDescription('illformed iteration element')
 
     def validate(self):
         """Validate data correctness.
@@ -486,20 +457,3 @@ class JobDescription:
 
         if self.iteration:
             self.iteration.validate()
-
-    def to_dict(self):
-        """Serialize job descripttion
-
-        Returns:
-            dict(str): dictionary with job description
-        """
-        return self.__dict__
-
-    def to_json(self, **args):
-        """Serialize job description to JSON description.
-
-        Returns:
-            JSON format of job description
-        """
-        return json.dumps(self.to_dict(), cls=JobJSONEncoder, **args)
-

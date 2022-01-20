@@ -1,4 +1,5 @@
 import pytest
+import json
 
 from qcg.pilotjob.inputqueue.jobdesc import JobDescription
 from qcg.pilotjob.errors import IllegalJobDescription
@@ -30,6 +31,27 @@ def test_jobdescription():
     j.validate()
 
     #TODO more tests
+
+
+def test_jobdescription_serialization():
+    example_job_file = 'example-job.json'
+    with open(example_job_file, 'rt') as example_job_f:
+        example_job_str = example_job_f.read()
+
+    assert example_job_str
+
+    print(f'job description read: {json.dumps(json.loads(example_job_str), indent=2)}')
+    job = JobDescription(**json.loads(example_job_str))
+    assert job
+
+    job_dict = job.to_dict()
+    print(f'job description serialized: {job.to_json(indent=2)}')
+    assert job_dict
+    print(f'job serialized: {job_dict}')
+
+    job_copy = JobDescription(**job_dict)
+    print(f'job description deserialized: {job_copy.to_json(indent=2)}')
+    assert job.to_dict() == job_copy.to_dict()
 
 
 def test_error_jobdescription():

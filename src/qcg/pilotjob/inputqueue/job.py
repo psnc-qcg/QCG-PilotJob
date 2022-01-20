@@ -3,7 +3,7 @@ import logging
 from enum import Enum
 
 from qcg.pilotjob.inputqueue.jobdesc import JobDescription
-from qcg.pilotjob.errors import IllegalJobDescription
+from qcg.pilotjob.common.errors import IllegalJobDescription
 
 
 class JobState(Enum):
@@ -113,6 +113,9 @@ class Job:
         Returns:
            JobState: job's or job's iteration current state
         """
+        if self.description.iteration is None and iteration == 0:
+            iteration = None
+
         return self.job_state if iteration is None else self.subjobs[self.iteration.normalize(iteration)]
 
     def str_state(self, iteration=None):
@@ -145,23 +148,24 @@ class Job:
                 not finished
         """
         logging.debug(f'job {self.get_name()} iteration {iteration} status changed to {state.name}')
-        self.change_state(state, iteration, err_msg)
+        old_state = self.change_state(state, iteration, err_msg)
 
-        if iteration is not None:
-            if state.is_finished():
-                self.subjobs_not_finished -= 1
+        if old_state != state:
+            if self.description.iteration is not None and iteration is not None:
+                if state.is_finished():
+                    self.subjobs_not_finished -= 1
 
-                if state.is_finished_fail():
-                    self.subjobs_failed += 1
+                    if state.is_finished_fail():
+                        self.subjobs_failed += 1
 
-                logging.debug(f'currently not finished subjobs {self.subjobs_not_finished}, '
-                              f'failed {self.subjobs_failed}')
+                    logging.debug(f'currently not finished subjobs {self.subjobs_not_finished}, '
+                                  f'failed {self.subjobs_failed}')
 
-                if self.subjobs_not_finished == 0 and not self.job_state.is_finished():
-                    # all subjobs finished - change whole job state
-                    final_state = JobState.SUCCEED if self.subjobs_failed == 0 else JobState.FAILED
-                    self.change_state(final_state, None)
-                    return final_state
+                    if self.subjobs_not_finished == 0 and not self.job_state.is_finished():
+                        # all subjobs finished - change whole job state
+                        final_state = JobState.SUCCEED if self.subjobs_failed == 0 else JobState.FAILED
+                        self.change_state(final_state, None)
+                        return final_state
 
         return None
 
@@ -173,12 +177,16 @@ class Job:
             iteration (int, optional): an iteration number (None if state relates to the main job)
             err_msg (str, optional): an error message (reason) related to the new job status
         """
-        if iteration:
+        logging.debug(f'change state job {self.get_name()} description iteration {self.description.iteration}, argument iteration {iteration}')
+        if self.description.iteration is not None and iteration is not None:
             it_idx = self.iteration.normalize(iteration)
             old_state = self.subjobs[it_idx]
-            self.subjobs[it_idx] = state
+            if old_state != state:
+                self.subjobs[it_idx] = state
         else:
             old_state = self.job_state
-            self.job_state = state
+            if old_state != state:
+                self.job_state = state
 
         #TODO: inform all runtime tracking services about job (iteration) status change
+        return old_state

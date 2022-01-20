@@ -1,4 +1,4 @@
-from qcg.pilotjob.errors import JobAlreadyExist
+from qcg.pilotjob.common.errors import JobAlreadyExist
 from qcg.pilotjob.inputqueue.job import Job
 
 

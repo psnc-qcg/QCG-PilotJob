@@ -1,4 +1,5 @@
-from qcg.pilotjob.inputqueue.iqmanager import IQReceiver, IQManager
+from qcg.pilotjob.inputqueue.iqmanager import IQManager
+from qcg.pilotjob.inputqueue.iqhandler import IQHandler
 from qcg.pilotjob.response import ResponseCode
 from qcg.pilotjob.inputqueue.jobdb import job_db
 from qcg.pilotjob.inputqueue.job import JobState
@@ -11,7 +12,7 @@ def test_iqscheduler_submit_nodeps():
     job_db.clear()
 
     iq_manager = IQManager()
-    iq_receiver = IQReceiver(iq_manager)
+    iq_receiver = IQHandler(iq_manager)
 
     submit_req = { 'cmd': 'submit',
                    'jobs': [
@@ -37,7 +38,7 @@ def test_iqscheduler_submit_deps_simple():
     job_db.clear()
 
     iq_manager = IQManager()
-    iq_receiver = IQReceiver(iq_manager)
+    iq_receiver = IQHandler(iq_manager)
 
     submit_req = { 'cmd': 'submit',
                    'jobs': [
@@ -85,7 +86,7 @@ def test_iqscheduler_submit_iters():
     job_db.clear()
 
     iq_manager = IQManager()
-    iq_receiver = IQReceiver(iq_manager)
+    iq_receiver = IQHandler(iq_manager)
 
     it_start = 2
     it_stop = 5
@@ -114,7 +115,7 @@ def test_iqscheduler_submit_deps_iters():
     job_db.clear()
 
     iq_manager = IQManager()
-    iq_receiver = IQReceiver(iq_manager)
+    iq_receiver = IQHandler(iq_manager)
 
     it_start = 2
     it_stop = 5
@@ -188,7 +189,7 @@ def test_iqscheduler_submit_deps_many_iters():
     job_db.clear()
 
     iq_manager = IQManager()
-    iq_receiver = IQReceiver(iq_manager)
+    iq_receiver = IQHandler(iq_manager)
 
     it_start = 2
     it_stop = 5
@@ -295,7 +296,7 @@ def test_iqscheduler_submit_deps_many_iters_2():
     job_db.clear()
 
     iq_manager = IQManager()
-    iq_receiver = IQReceiver(iq_manager)
+    iq_receiver = IQHandler(iq_manager)
 
     it_start = 2
     it_stop = 5
@@ -426,7 +427,7 @@ def test_iqscheduler_submit_deps_many_iters_many():
     job_db.clear()
 
     iq_manager = IQManager()
-    iq_receiver = IQReceiver(iq_manager)
+    iq_receiver = IQHandler(iq_manager)
 
     it_start = 2
     it_stop = 5
@@ -647,7 +648,7 @@ def test_iqscheduler_submit_deps_omit_iter():
     job_db.clear()
 
     iq_manager = IQManager()
-    iq_receiver = IQReceiver(iq_manager)
+    iq_receiver = IQHandler(iq_manager)
 
     it_start = 2
     it_stop = 5
@@ -785,7 +786,7 @@ def test_iqscheduler_submit_deps_omit():
     job_db.clear()
 
     iq_manager = IQManager()
-    iq_receiver = IQReceiver(iq_manager)
+    iq_receiver = IQHandler(iq_manager)
 
     it_start = 2
     it_stop = 5
@@ -887,7 +888,7 @@ def test_iqscheduler_submit_deps_omit_all_iters():
     job_db.clear()
 
     iq_manager = IQManager()
-    iq_receiver = IQReceiver(iq_manager)
+    iq_receiver = IQHandler(iq_manager)
 
     it_start = 2
     it_stop = 5
@@ -959,3 +960,61 @@ def test_iqscheduler_submit_deps_omit_all_iters():
                 iq_manager.ready_iterations['job_02'].job.iterations_deps_count == None))
 
     assert job_db.get('job_01').state() == JobState.OMITTED
+
+
+def test_iqscheduler_ready_iterations():
+    """Ready iterations for jobs w/o dependencies"""
+
+    # clear database
+    job_db.clear()
+
+    iq_manager = IQManager()
+    iq_receiver = IQHandler(iq_manager)
+
+    jobs_spec = {
+        'job_01': {'iters': {'start': 0, 'stop': 5}, 'resources': { 'cores': { 'exact':  1 }}},
+        'job_02': {'iters': {'start': 5, 'stop': 7}, 'resources': { 'cores': { 'exact':  2 }}}
+    }
+
+    submit_req = { 'cmd': 'submit',
+                   'jobs': [
+                       {'name': jname,
+                        'execution': {'exec': 'date'},
+                        'iteration': job['iters'],
+                        'resources': job['resources']
+                        } for jname, job in jobs_spec.items()]
+                 }
+
+    response = iq_receiver.handle_submit_job(submit_req)
+    assert all((response.code == ResponseCode.OK, response.data.get('submitted', 0) == 2,
+                len(response.data.get('jobs', [])) == 2)), str(response.data)
+    assert (job_name in response.data.get('jobs', []) for job_name in ['job_01', 'job_02']), \
+        str(response.data)
+
+    assert all((len(iq_manager.non_ready_jobs) == 0,
+                len(iq_manager.tracked_jobs) == 0,
+                len(iq_manager.ready_iterations) == 2))
+    assert all(job in iq_manager.ready_iterations for job in ['job_01', 'job_02'])
+    assert all(len(iq_manager.ready_iterations[job_id].iterations) == job['iters']['stop'] - job['iters']['start']
+               for job_id, job in jobs_spec.items())
+
+    allocation_1, ncores_1 = iq_manager.get_ready_iterations(4, max_cpu_cores=28, max_node_cpu_cores=28, max_nodes=1)
+    assert all((allocation_1 is not None, ncores_1 == 4)), str(allocation_1)
+    print(f'allocation_1 for 4 cores: {str(allocation_1)}')
+
+    allocation_2, ncores_2 = iq_manager.get_ready_iterations(4, max_cpu_cores=28, max_node_cpu_cores=28, max_nodes=1)
+    assert all((allocation_2 is not None, ncores_2 == 3)), str(allocation_2)
+    print(f'allocation_2 for 4 cores: {str(allocation_2)}')
+
+    assert len(iq_manager.ready_iterations) == 1
+
+    allocation_3, ncores_3 = iq_manager.get_ready_iterations(4, max_cpu_cores=28, max_node_cpu_cores=28, max_nodes=1)
+    assert all((allocation_3 is not None, ncores_3 == 2)), str(allocation_3)
+    print(f'allocation_3 for 4 cores: {str(allocation_3)}')
+
+    assert len(iq_manager.ready_iterations) == 0
+
+    assert sum([ncores_1, ncores_2, ncores_3]) ==\
+           sum((job['iters']['stop'] - job['iters']['start']) * job['resources']['cores']['exact']
+               for job in jobs_spec.values())
+

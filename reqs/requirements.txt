@@ -2,3 +2,4 @@ zmq
 click
 prompt_toolkit
 pytest
+cached-property

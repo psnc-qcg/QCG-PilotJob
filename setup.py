@@ -5,16 +5,28 @@ with open("README.md", "r") as fh:
 
 setup(
 	name="qcg-pilotjob",
-	version="0.9.1",
+	version="0.14.0-beta",
 
 	author="Piotr Kopta",
 	author_email="pkopta@man.poznan.pl",
 
-	packages=["qcg.pilotjob", "qcg.pilotjob.api", "qcg.pilotjob.launcher"],
+	packages=["qcg.pilotjob",
+		  "qcg.pilotjob.utils",
+		  "qcg.pilotjob.common",
+		  "qcg.pilotjob.executor",
+		  "qcg.pilotjob.executor.cmd",
+		  "qcg.pilotjob.executor.launcher",
+		  "qcg.pilotjob.inputqueue",
+		  "qcg.pilotjob.inputqueue.cmd"],
 	package_dir={
-		"qcg.pilotjob": "src/qcg/pilotjob",
-		"qcg.pilotjob.api": "src/qcg/pilotjob/api",
-		"qcg.pilotjob.launcher": "src/qcg/pilotjob/launcher",
+		  "qcg.pilotjob": "src/qcg/pilotjob",
+		  "qcg.pilotjob.utils": "src/qcg/pilotjob/utils",
+		  "qcg.pilotjob.common": "src/qcg/pilotjob/common",
+		  "qcg.pilotjob.executor": "src/qcg/pilotjob/executor",
+		  "qcg.pilotjob.executor.cmd": "src/qcg/pilotjob/executor/cmd",
+		  "qcg.pilotjob.executor.launcher": "src/qcg/pilotjob/executor/launcher",
+		  "qcg.pilotjob.inputqueue": "src/qcg/pilotjob/inputqueue",
+		  "qcg.pilotjob.inputqueue.cmd": "src/qcg/pilotjob/inputqueue/cmd"
 	},
 
 	url="http://github.com/vecma-project/QCG-PilotJob",
@@ -26,10 +38,13 @@ setup(
 	install_requires=[
 		"zmq",
 		"click",
-		"prompt_toolkit"
+		"prompt_toolkit",
+		"cached-property"
 		],
 
 	entry_points = {
-		'console_scripts': ['qcg-pm-service=qcg.pilotjob.command_line:service','qcg-pm=qcg.pilotjob.client_cmd:qcgpjm'],
+		'console_scripts': ['qcg-service=qcg.pilotjob.inputqueue.cmd.service:iq',
+				    'qcg-executor=qcg.pilotjob.executor.cmd.service:ex',
+				    'qcg-client=qcg.pilotjob.inputqueue.cmd.client:client'],
 	},
 )
