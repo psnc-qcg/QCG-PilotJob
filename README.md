@@ -71,10 +71,13 @@ QCG-PilotJob service, i.e:
 * collection of performance metrics for running tasks
 * implementation of all parallel application models
 
-Also planned are features currently not available in the stable version of the QCG-PilotJob service, such as:
+Also planned are features currently not available in the stable version of the
+QCG-PilotJob service, such as:
 * real-time job processing monitoring with performance metrics
-* support for disabling the Exectur service at any time - jobs processed by such a service will be resubmitted to another, fully operational one
-* support of connection routing enabling Executor services to run on different computing clusters and/or cloud machines
+* support for disabling the Exectur service at any time - jobs processed by
+  such a service will be resubmitted to another, fully operational one
+* support of connection routing enabling Executor services to run on different
+  computing clusters and/or cloud machines
 
 ## Installation
 The experimental version of QCG-PilotJob service with the global queue can be
@@ -86,3 +89,165 @@ $ pip install --upgrade git+https://github.com/vecma-project/QCG-PilotJob.git@gl
 
 ## Example usage
 
+### Introduction
+We assume that the QCG-PilotJob software has been installed in an environment
+created via `virtualenv`. After initializing such an environment:
+
+``bash 
+$ source venv/bin/activate
+```
+
+the following executable programs should be available (`venv/bin`):
+* `qcg-service` - starts the QCG-PilotJob InputQueue service
+* `qcg-executor` - starts the QCG-PilotJob Executor service
+* `qcg-client` - client used to communicate with the QCG-PilotJob InputQueue
+  service
+
+### Starting the QCG-PilotJob InputQueue service
+We can run this service on an access node of the HPC machine or directly in
+the created allocation. In this example we will start the service on the access
+node. By default, the service will listen on the public address of the access
+node, note that not every such address will be available from compute nodes. In
+such cases we can use the `-i` parameter and indicate a specific IP address on
+which the service should listen for connections from Executor services
+and clients (in the case of the Altair cluster it is `172.16.31.250`). When
+debugging problems it may be helpful to use the `-d` option, which prints
+detailed messages to the screen.
+
+```bash 
+$ qcg-service -i 172.16.31.250 -d
+```
+
+After starting, the InputQueue service should print the address where it will
+listen for calls from Executor services as well as clients, e.g:
+
+```bash
+inputqueue listening @ tcp://172.16.31.250:7040
+```
+
+At the moment, there is no option yet to switch a running service to the
+background, so to follow next steps we have to use another terminal session, or
+use the `screen` program which allows to create new terminals in one session.
+
+### Running the QCG-PilotJob Executor service
+We run this service inside the queue system allocation (currently only the
+Slurm system is supported), i.e. directly on the compute nodes. The Executor
+service will connect to the InputQueue service on startup. The address of the
+previously started InputQueue service can be passed using the `-i` parameter,
+e.g: `-i tcp://172.16.31.250:7040`, or start the Executor service in the same
+directory where we started the InputQueue service - the address of the last
+started service is written to the `iq.last_service_address` file, which in the
+absence of the `-i` argument is loaded by the Executor service by default. In
+the following example we will use this function and run both services in the
+same directory.  An example running the service on the Altair computing system
+might look as follows:
+
+```bash
+$ srun -N 1 --ntasks-per-node=48 -p fast --time=60:00 -A project_test --pty bash -c 'venv/bin/qcg-executor -d'
+```
+
+Where of course parameters such as `--ntasks-per-node`, `-p`, `A` will be
+specific to each computing system. In this case we used the `srun` command with
+a `--pty` parameter, which will cause the messages printed by the running
+service to go to our console, and the `srun` program terminate when
+the Executor service terminates. We can also use `sbatch` instead of `srun` to
+run services in batch mode without access to messages.
+
+After successfully running the Executor service and connecting to the
+previously run InputQueue service, we should see a message on the screen:
+
+```bash
+successfully connected to inputqueue @ tcp://172.16.31.250:7040
+```
+
+### Task launching
+After launching the Executor service the jobs that we submit to the InputQueue
+service will be started immediately, however, nothing stands in the way to
+submit jobs before launching the Executor service, in this case they will be
+started only after the first Executor connects. In order to submit jobs we can
+run the `qcg-client` command from an access node or, for example, from a
+compute node. As with the Executor service, we must either specify the address
+of the running InputQueue service (argument `-i`), or run the `qcg-client`
+command in the same directory from which the `InputQueue` service was run - in
+the latter case, the address stored in the `iq.last_service_address` file will
+be automatically used by the client.  Using the example job description (saved
+in the `example-job.json` file):
+
+```json
+{
+    "name": "date-example",
+    "execution": {
+      "exec": "/bin/date",
+      "env": {},
+      "wd": "date.sandbox",
+      "stdout": "date.${ncores}.${it}.stdout",
+      "stderr": "date.${ncores}.${it}.stderr"
+    },
+    "resources": {
+      "cores": {
+        "exact": 1
+      }
+    },
+    "iteration": {
+        "start": 0,
+        "stop": 10
+    }
+}
+```
+we can run the job (10 iterations of the job) on the compute node using the
+`submit` command of the `qcg-client` command, e.g:
+
+```bash
+$ venv/bin/qcg-client submit -f example-job.json
+connecting to tcp://172.16.31.250:7040 ...
+submiting job description: {
+  "cmd": "submit_job",
+  "jobs": [
+    {
+      "name": "date",
+      "execution": {
+        "exec": "/bin/date",
+        "env": {},
+        "wd": "date.sandbox",
+        "stdout": "date.${ncores}.${it}.stdout".
+      },
+      "resources": {
+        "cores": {
+          "exact": 1
+        }
+      },
+      "iteration": {
+        "start": 0,
+        "stop": 10
+      }
+    }
+  ]
+}
+jobs submitted with response: { 'code': 0, 'message': '1 submitted', 'data': { 'submitted': 1, 'jobs': ['date']}}
+```
+
+With the Executor service running, the above job should finish quite quickly.
+To check the current processing status of a job, we can use the `status`
+command of the `qcg-client` command, specifying the job ID in addition, e.g:
+
+`bash
+$ venv/bin/qcg-client status date
+connecting to tcp://172.16.31.250:7040 ...
+job info response: { 'code': 0, 'message': 'ok', 'data': { 'jobs': { 'date': { 'status': 'ok', 'state': 'SUCCEED' }}}}
+```
+
+In the directory where the InputQueue service was running, a `date.sandbox`
+directory should be created with a series of `date.1.X.stdout` files where X
+should be between 0-9 (inclusive).
+
+Note that at any time we can run an additional Executor service in a new
+allocation of the queue system, which will increase the resources available in
+the InputQueue service, thus processing the jobs faster.
+
+Currently, automatic detection of the end of the Executor service is not
+implemented in the InputQueue service, so terminating the Executor service
+while the InputQueue service is running may cause errors when starting tasks.
+
+### Termination of the InputQueue service
+
+Currently, the InputQueue and Executor services must be stopped manually.
