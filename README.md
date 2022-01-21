@@ -230,7 +230,7 @@ With the Executor service running, the above job should finish quite quickly.
 To check the current processing status of a job, we can use the `status`
 command of the `qcg-client` command, specifying the job ID in addition, e.g:
 
-`bash
+```bash
 $ venv/bin/qcg-client status date
 connecting to tcp://172.16.31.250:7040 ...
 job info response: { 'code': 0, 'message': 'ok', 'data': { 'jobs': { 'date': { 'status': 'ok', 'state': 'SUCCEED' }}}}
