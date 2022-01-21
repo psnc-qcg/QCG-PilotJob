@@ -93,7 +93,7 @@ $ pip install --upgrade git+https://github.com/vecma-project/QCG-PilotJob.git@gl
 We assume that the QCG-PilotJob software has been installed in an environment
 created via `virtualenv`. After initializing such an environment:
 
-``bash 
+```bash 
 $ source venv/bin/activate
 ```
 
