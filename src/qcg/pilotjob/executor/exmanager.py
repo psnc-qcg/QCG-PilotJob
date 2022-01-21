@@ -94,6 +94,7 @@ class IQInstance:
         ExEvent.register_iq({'result': result}).publish()
 
         if result and result.get('code') == 0:
+            print(f'successfully connected to inputqueue @ {self.address}')
             self.start_heart_beat_notifier()
 
             if result.get('data', {}).get('events'):
