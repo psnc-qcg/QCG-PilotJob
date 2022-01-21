@@ -3,7 +3,7 @@ import logging
 import asyncio
 import signal
 
-from qcg.pilotjob.common.config import Configuration
+from qcg.pilotjob.common.config import Var, Configuration
 from qcg.pilotjob.common.zmqiface import ZMQInterface
 from qcg.pilotjob.common.receiver import Receiver
 from qcg.pilotjob.inputqueue.iqmanager import IQManager
@@ -18,8 +18,10 @@ def sig_int_handler(sig, frame):
     stop_processing = True
 
 @click.command()
+@click.option('-i', '--address', envvar='QCG_IQ_ADDRESS', help="IP address input queue should listen on")
+@click.option('-p', '--port', envvar='QCG_IQ_PORT', help="port number input queue should listen on")
 @click.option('-d', '--debug', envvar='QCG_IQ_DEBUG', is_flag=True, default=False, help="enable debugging")
-def iq(debug):
+def iq(address, port, debug):
     setup_logging(debug)
 
     logging.info('starting input queue service')
@@ -30,6 +32,15 @@ def iq(debug):
 
     try:
         config = Configuration()
+
+        if address:
+            config.set(Var.ZMQ_IP_ADDRESS, address)
+            logging.info(f'inputqueue iface ip address set to {address}')
+
+        if port:
+            config.set(Var.ZMQ_PORT, port)
+            logging.info(f'inputqueue iface port set to {address}')
+
         asyncio.get_event_loop().run_until_complete(asyncio.ensure_future(run_service(config)))
     finally:
         asyncio.get_event_loop().close()
@@ -43,6 +54,7 @@ async def run_service(config):
     with open(iq_address_fname, 'wt') as iq_address_f:
         iq_address_f.write(zmq_iface.external_address)
     logging.debug(f'current iq address saved to {iq_address_fname}')
+    print(f'inputqueue listening @ {zmq_iface.external_address}')
 
     manager = IQManager(config)
     iq_handler = IQHandler(manager)
@@ -57,7 +69,7 @@ async def run_service(config):
         logging.exception('run_service error')
     finally:
         await receiver.stop()
-        manager.stop()
+        await manager.stop()
 
 
 def setup_event_loop():
