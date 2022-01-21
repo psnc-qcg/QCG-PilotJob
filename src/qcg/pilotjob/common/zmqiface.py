@@ -37,7 +37,7 @@ class ZMQInterface:
             self.external_address = self.real_address.replace('//0.0.0.0:',
                                                               f'//{socket.gethostbyname(socket.gethostname())}:')
 
-        logging.info(f'zmq interface address {self.real_address}')
+        logging.info(f'zmq interface address {self.external_address}')
 
     def stop(self):
         if self.socket:
