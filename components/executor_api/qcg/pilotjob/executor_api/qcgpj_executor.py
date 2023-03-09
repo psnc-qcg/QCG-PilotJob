@@ -82,7 +82,7 @@ class QCGPJExecutor(Executor):
             args.append(wrapper_rt_stats)
 
         if other_args:
-            args.append(*other_args)
+            args.extend(other_args)
 
         client_conf = {'log_file': wd + '/api.log', 'log_level': client_log_level}
 
