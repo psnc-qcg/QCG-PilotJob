@@ -46,13 +46,13 @@ class QCGPJExecutor(Executor):
 
     """
     def __init__(self,
+                 *other_args,
                  wd=".",
                  resources=None,
                  reserve_core=False,
                  enable_rt_stats=False,
                  wrapper_rt_stats=None,
-                 log_level='info',
-                 *other_args
+                 log_level='info'
                  ):
 
         self.finished = False
@@ -82,7 +82,7 @@ class QCGPJExecutor(Executor):
             args.append(wrapper_rt_stats)
 
         if other_args:
-            args.append(other_args)
+            args.append(*other_args)
 
         client_conf = {'log_file': wd + '/api.log', 'log_level': client_log_level}
 
