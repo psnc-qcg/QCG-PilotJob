@@ -86,7 +86,8 @@ class QCGPJExecutor(Executor):
 
         client_conf = {'log_file': wd + '/api.log', 'log_level': client_log_level}
 
-        _logger.info(f'Starting QCG-PJ Manager with arguments: {args}')
+        with open("executor_api.log", "w") as f:
+            f.write(f'Starting QCG-PJ Manager with arguments: {args}')
 
         # create QCGPJ Manager (service part)
         self._qcgpjm = LocalManager(args, client_conf)
