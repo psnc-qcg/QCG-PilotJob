@@ -96,10 +96,10 @@ class Launcher:
 
         self.connection_sem = asyncio.Semaphore(Launcher.MAXIMUM_CONCURRENT_CONNECTIONS)
 
-        self.agents_ready_treshold = min(1.0, max(0.1, float(Config.NL_READY_TRESHOLD.get(self.config))))
-        self.agents_ready_treshold_reached = False
+        self.agents_ready_threshold = min(1.0, max(0.1, float(Config.NL_READY_THRESHOLD.get(self.config))))
+        self.agents_ready_threshold_reached = False
 
-        _logger.info(f'ready treshold for node launchers set to {int(self.agents_ready_treshold * 100.0)}%')
+        _logger.info(f'ready threshold for node launchers set to {int(self.agents_ready_threshold * 100.0)}%')
 
     def set_job_finish_callback(self, jobs_finish_cb, *jobs_finish_cb_args):
         """Set default function for notifing about finished jobs.
@@ -393,9 +393,9 @@ class Launcher:
         start_t = datetime.now()
 
         _logger.info(f'waiting max {self.agents_init_timeout} secs for at least '
-                     f'{int(len(self.agents) * self.agents_ready_treshold)} ready nodes')
+                     f'{int(len(self.agents) * self.agents_ready_threshold)} ready nodes')
 
-        while len(self.nodes) < int(len(self.agents) * self.agents_ready_treshold):
+        while len(self.nodes) < int(len(self.agents) * self.agents_ready_threshold):
             if (datetime.now() - start_t).total_seconds() > self.agents_init_timeout:
                 _logger.error(f'timeout while waiting for agents start - currently {len(self.nodes)} registered from '
                               f'{len(self.agents)} launched')
@@ -409,7 +409,7 @@ class Launcher:
 
         _logger.info(f'{len(self.nodes)} from total {len(self.agents)} agents started in '
                       f'{(datetime.now() - start_t).total_seconds()} seconds')
-        self.agents_ready_treshold_reached = True
+        self.agents_ready_threshold_reached = True
 
     async def __fire_ssh_agent(self, ssh_data, args):
         """Launch node agent instance via ssh.
@@ -544,7 +544,7 @@ class Launcher:
                     _logger.info(f'setting node {agent_node.name} available')
                     agent_node.available = True
 
-                    if self.agents_ready_treshold_reached:
+                    if self.agents_ready_threshold_reached:
                         self.manager.call_scheduler()
                 else:
                     _logger.error(f'cannot find agents {msg["agent_id"]} node')

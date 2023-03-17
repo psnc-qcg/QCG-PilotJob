@@ -223,9 +223,9 @@ class Config(Enum):
         'default': 600,
     }
 
-    NL_READY_TRESHOLD = {
-        'name': 'launcher.ready.treshold',
-        'cmd_opt': '--nl-ready-treshold',
+    NL_READY_THRESHOLD = {
+        'name': 'launcher.ready.threshold',
+        'cmd_opt': '--nl-ready-threshold',
         'default': 1.0,
     }
 

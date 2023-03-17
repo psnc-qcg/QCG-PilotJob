@@ -159,9 +159,9 @@ class QCGPMService:
         parser.add_argument(Config.NL_INIT_TIMEOUT.value['cmd_opt'],
                             help='node launcher init timeout (s)',
                             type=int, default=Config.NL_INIT_TIMEOUT.value['default'])
-        parser.add_argument(Config.NL_READY_TRESHOLD.value['cmd_opt'],
+        parser.add_argument(Config.NL_READY_THRESHOLD.value['cmd_opt'],
                             help='percent (0.0-1.0) of node launchers registered when computations should start',
-                            type=float, default=Config.NL_READY_TRESHOLD.value['default'])
+                            type=float, default=Config.NL_READY_THRESHOLD.value['default'])
         parser.add_argument(Config.DISABLE_PUBLISHER.value['cmd_opt'],
                             help='disable status publisher interface',
                             default=Config.DISABLE_PUBLISHER.value['default'],
@@ -247,7 +247,7 @@ class QCGPMService:
             Config.ENABLE_RT_STATS: self._args.enable_rt_stats,
             Config.WRAPPER_RT_STATS: self._args.wrapper_rt_stats,
             Config.NL_INIT_TIMEOUT: self._args.nl_init_timeout,
-            Config.NL_READY_TRESHOLD: self._args.nl_ready_treshold,
+            Config.NL_READY_THRESHOLD: self._args.nl_ready_threshold,
             Config.DISABLE_PUBLISHER: self._args.disable_pub,
             Config.NL_START_METHOD: self._args.nl_start_method,
         }
