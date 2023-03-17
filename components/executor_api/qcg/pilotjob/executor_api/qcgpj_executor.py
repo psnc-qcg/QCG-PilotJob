@@ -46,13 +46,13 @@ class QCGPJExecutor(Executor):
 
     """
     def __init__(self,
+                 *other_args,
                  wd=".",
                  resources=None,
                  reserve_core=False,
                  enable_rt_stats=False,
                  wrapper_rt_stats=None,
-                 log_level='info',
-                 *other_args
+                 log_level='info'
                  ):
 
         self.finished = False
@@ -82,11 +82,12 @@ class QCGPJExecutor(Executor):
             args.append(wrapper_rt_stats)
 
         if other_args:
-            args.append(other_args)
+            args.extend(other_args)
 
         client_conf = {'log_file': wd + '/api.log', 'log_level': client_log_level}
 
-        _logger.info(f'Starting QCG-PJ Manager with arguments: {args}')
+        with open(wd + "/executor_api.log", "w") as f:
+            f.write(f'Starting QCG-PJ Manager with arguments: {args}')
 
         # create QCGPJ Manager (service part)
         self._qcgpjm = LocalManager(args, client_conf)
