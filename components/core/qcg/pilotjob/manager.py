@@ -1362,7 +1362,7 @@ class DirectManagerHandler:
                 job = self._manager.job_list.get(real_job_name)
 
                 if job is None:
-                    raise Exception(f'Job/iteration {job_name} doesn\'t exist')
+                    raise Exception(f'Job/iteration {real_job_name} doesn\'t exist')
 
                 if job_iteration is not None:
                     if not job.iteration.in_range(job_iteration):
@@ -1380,7 +1380,7 @@ class DirectManagerHandler:
 
                 canceled += 1
             except Exception as exc:
-                _logger.exception(f'failed to cancel job: {str(exc)}')
+                _logger.error(f'failed to cancel job: {str(exc)}')
                 errors[job_name] = exc.args[0]
 
         data = {
