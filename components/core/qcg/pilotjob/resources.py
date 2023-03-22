@@ -237,6 +237,24 @@ class Node:
 
         self._available = True
 
+    def set_available_core_ids(self, core_ids):
+        """
+        Set a new list of available cpu/core identifiers.
+        There are scenarios where information obtained from Slurm is not correct, and the real core/cpu identifiers are
+        gathered by the agent launched from the manager.
+
+        Args:
+            core_ids (list(int)) - list of available core/cpu identifiers
+        """
+        if len(core_ids) != self._total_cores:
+            _logger.error(f'new number of available core identifiers {len(core_ids)} differs from initial set {self._total_cores}')
+            return
+
+        prev_used = self.used
+
+        self._core_ids = core_ids
+        self._free_cores = list(self._core_ids[prev_used:self._total_cores])
+
     @property
     def name(self):
         """str: node name"""

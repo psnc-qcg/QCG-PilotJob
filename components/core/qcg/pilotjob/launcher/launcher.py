@@ -380,11 +380,11 @@ class Launcher:
                 agent_args.append(json.dumps(idata['options']))
 
             if 'ssh' in idata:
-                process = await self.__fire_ssh_agent(idata['ssh'], agent_args)
+                process = await self.__fire_ssh_agent(idata['ssh'], agent_args, idata['node'])
             elif 'slurm' in idata:
-                process = await self._fire_slurm_agent(idata['slurm'], agent_args)
+                process = await self._fire_slurm_agent(idata['slurm'], agent_args, idata['node'])
             elif 'local' in idata:
-                process = await self._fire_local_agent(idata['local'], agent_args)
+                process = await self._fire_local_agent(idata['local'], agent_args, idata['node'])
             else:
                 raise ValueError('missing start type of node agent {}'.format(idata['agent_id']))
 
@@ -411,12 +411,13 @@ class Launcher:
                       f'{(datetime.now() - start_t).total_seconds()} seconds')
         self.agents_ready_threshold_reached = True
 
-    async def __fire_ssh_agent(self, ssh_data, args):
+    async def __fire_ssh_agent(self, ssh_data, args, node):
         """Launch node agent instance via ssh.
 
         Args:
             ssh_data (dict) - must contain 'node' attribute, optional attributes: 'account' (str), 'args' (str[])
-            args - aguments for node agent application
+            args (list) - aguments for node agent application
+            node (resources.Node) - the node resources where to launch agent
         """
         if 'node' not in ssh_data:
             raise ValueError('missing ssh node definition')
@@ -433,19 +434,20 @@ class Launcher:
         return await asyncio.create_subprocess_exec(shutil.which('ssh'), ssh_address, *ssh_args,
                                                     agent_cmd)
 
-    async def _fire_slurm_agent(self, slurm_data, args):
+    async def _fire_slurm_agent(self, slurm_data, args, node):
         """Launch node agent instance via slurm (inside allocation).
 
         Args:
             slurm_data (dict) - must contain 'node' attribute, optional attributes: 'node' (str), 'args' (str[])
-            args - aguments for node agent application
+            args (list) - aguments for node agent application
+            node (resources.Node) - the node resources where to launch agent
         """
         if 'node' not in slurm_data:
             raise ValueError('missing slurm node name')
 
         slurm_args = ['-J', 'agent-{}'.format(slurm_data['node']), '-w', slurm_data['node'],
                       f'{SlurmArg.CPU_BIND()}=none', '-vvv', '--mem-per-cpu=0', '--oversubscribe', '--overcommit',
-                      '--overlap', '-N', '1', '-n', '1', '-D', self.work_dir, '-u']
+                      '--overlap', '--nodes=1', '--ntasks=1', f'--cpus-per-task={node.total}', '-D', self.work_dir, '-u']
 
         if top_logger.level == logging.DEBUG:
             slurm_args.extend(['--slurmd-debug=verbose', '-vvvvv'])
@@ -465,12 +467,13 @@ class Launcher:
         return await asyncio.create_subprocess_exec(shutil.which('srun'), *slurm_args,
                                                     *self.node_local_agent_cmd, *args, stdout=stdout_p, stderr=stderr_p)
 
-    async def _fire_local_agent(self, local_data, args): #pylint: disable=W0613
+    async def _fire_local_agent(self, local_data, args, node): #pylint: disable=W0613
         """Launch node agent instance locally.
 
         Args:
             local_data (dict):
-            args - aguments for node agent application
+            args (list) - aguments for node agent application
+            node (resources.Node) - the node resources where to launch agent
         """
         return await asyncio.create_subprocess_exec(*self.node_local_agent_cmd, *args)
 
@@ -540,7 +543,16 @@ class Launcher:
                 self.nodes[msg['agent_id']] = {'registered_at': datetime.now(), 'address': msg['local_address']}
 
                 agent_node = self.agents.get(msg['agent_id'], {}).get('data', {}).get('node', None)
+
                 if agent_node:
+                    agent_cpus_avail = msg.get("cpus_avail", {})
+                    if agent_node.total != len(agent_cpus_avail):
+                        _logger.error(f'agent from node {msg.get("agent_id")} reported different # of cpus '
+                                      f'{msg.get("cpus_avail")} than discovered from Slurm {agent_node.total}')
+                    else:
+                        _logger.info(f'updating node {agent_node.name} available cores to {agent_cpus_avail}')
+                        agent_node.set_available_core_ids([str(core_id) for core_id in sorted(list(agent_cpus_avail))])
+
                     _logger.info(f'setting node {agent_node.name} available')
                     agent_node.available = True
 
@@ -549,8 +561,8 @@ class Launcher:
                 else:
                     _logger.error(f'cannot find agents {msg["agent_id"]} node')
 
-                _logger.info(f'node\'s {msg.get("agent_id")} agent registered ({len(self.nodes)} out of '
-                             f'{len(self.agents)} currently registered)')
+                _logger.info(f'node\'s {msg.get("agent_id")} agent registered (with {msg.get("cpus_avail")} cpus) '
+                             f'({len(self.nodes)} out of {len(self.agents)} currently registered)')
 
                 _logger.debug('registered at (%s) agent (%s) listening at (%s)',
                               self.nodes[msg['agent_id']]['registered_at'],

@@ -11,6 +11,7 @@ from datetime import datetime
 from os.path import join
 import threading
 import concurrent
+import os
 
 import zmq
 from zmq.asyncio import Context
@@ -70,6 +71,9 @@ class Agent:
         self.runtime_stats = None
         self.runtime_wrapper = None
 
+        self.local_cpu_ids = None
+
+
     def _clear(self):
         """Reset runtime settings. """
         self.context = None
@@ -96,6 +100,8 @@ class Agent:
         self.remote_address = remote_address
         self.context = Context.instance()
 
+        self.local_cpu_ids = sorted(list(os.sched_getaffinity(0)))
+
         _logger.debug('agent with id (%s) run to report to (%s)', self.agent_id, self.remote_address)
 
         self.in_socket = self.context.socket(zmq.REP) #pylint: disable=maybe-no-member
@@ -119,8 +125,8 @@ class Agent:
 
         self.local_export_address = '{}://{}:{}'.format(proto, socket.gethostbyname(local_hostname), self.local_port)
 
-        _logger.info('agent with id (%s) listen at address (%s), export address (%s)',
-                      self.agent_id, self.local_address, self.local_export_address)
+        _logger.info(f'agent with id ({self.agent_id}) listen at address ({self.local_address}), export address '
+                     f'({self.local_export_address}), #{len(self.local_cpu_ids)} of available CPUs ({str(self.local_cpu_ids)})')
 
         try:
             await self._send_ready()
@@ -380,7 +386,8 @@ class Agent:
                 'status': 'READY',
                 'date': datetime.now().isoformat(),
                 'agent_id': self.agent_id,
-                'local_address': self.local_export_address})
+                'local_address': self.local_export_address,
+                'cpus_avail': self.local_cpu_ids})
 
             msg = await out_socket.recv_json()
 
