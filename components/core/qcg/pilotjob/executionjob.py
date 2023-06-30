@@ -179,11 +179,11 @@ class ExecutionJob:
             if self.job_execution.script and job_exec:
                 final_args = job_args or []
                 final_args.extend(['bash', '-l', '-c', f"'{self.job_execution.script}'"])
-                bash_cmd += 'exec -l {} {}'.format(job_exec, ' '.join([str(arg) for arg in final_args]))
+                bash_cmd += 'exec {} {}'.format(job_exec, ' '.join([str(arg) for arg in final_args]))
             elif self.job_execution.script:
                 bash_cmd += self.job_execution.script
             else:
-                bash_cmd += 'exec -l {} {}'.format(job_exec, ' '.join([str(arg) for arg in job_args]))
+                bash_cmd += 'exec {} {}'.format(job_exec, ' '.join([str(arg) for arg in job_args]))
 
             self.job_execution.args = ['-l', '-c', bash_cmd]
         else:
