@@ -70,3 +70,22 @@ Indices and tables
 Authors
 =======
 | Bartosz Bosak, Piotr Kopta, Tomasz Piontek (PSNC)
+
+
+Acknowledgements
+================
+Development and maintenance of the project has been supported by several initiatives, including:
+
++-----------------------------------------------------+----------------------------------------------+
+| `COMPAT <https://www.compatproject.eu/>`_           | .. image:: images/logo-compat.png            |
++-----------------------------------------------------+----------------------------------------------+
+| `VECMA <https://www.vecma.eu/>`_                    | .. image:: images/logo-vecma.png             |
++-----------------------------------------------------+----------------------------------------------+
+| `PRACE-LAB <https://prace-lab.pl>`_                 | .. image:: images/logo-pracelab.png          |
++-----------------------------------------------------+----------------------------------------------+
+| `PIONIER-LAB <https://pionier-lab.pionier.net.pl>`_ | .. image:: images/logo-pionierlab.png        |
++-----------------------------------------------------+----------------------------------------------+
+
+
+
+
