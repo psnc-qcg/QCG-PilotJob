@@ -449,9 +449,6 @@ class Launcher:
                       f'{SlurmArg.CPU_BIND()}=none', '-vvv', '--mem-per-cpu=0', '--oversubscribe', '--overcommit',
                       '--overlap', '--nodes=1', '--ntasks=1', f'--cpus-per-task={node.total}', '-D', self.work_dir, '-u']
 
-        if top_logger.level == logging.DEBUG:
-            slurm_args.extend(['--slurmd-debug=verbose', '-vvvvv'])
-
         slurm_args.extend(slurm_data.get('args', []))
 
         stdout_p = asyncio.subprocess.DEVNULL
