@@ -447,7 +447,7 @@ class Launcher:
 
         slurm_args = ['-J', 'agent-{}'.format(slurm_data['node']), '-w', slurm_data['node'],
                       f'{SlurmArg.CPU_BIND()}=none', '-vvv', '--mem-per-cpu=0', '--oversubscribe', '--overcommit',
-                      '--overlap', '--nodes=1', '--ntasks=1', f'--cpus-per-task={node.total}', '-D', self.work_dir, '-u']
+                      '--nodes=1', '--ntasks=1', f'--cpus-per-task={node.total}', '-D', self.work_dir, '-u']
 
         slurm_args.extend(slurm_data.get('args', []))
 
