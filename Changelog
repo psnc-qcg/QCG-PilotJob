@@ -1,3 +1,56 @@
+Version 0.14.2   2025-04-08 Bartosz Bosak <bbosak@man.poznan.pl>
+       * disabled --slurm_debug (the option's usage is often not permitted)
+
+Version 0.14.1   2024-01-30 Piotr Kopta <pkopta@man.poznan.pl>
+       * fixed executing scripts (removed exec's -l parameter)
+
+Version 0.14.0   2023-03-22 Piotr Kopta <pkopta@man.poznan.pl>, Laurens Veen
+<L.E.Veen@uva.nl>
+       * improved handling of custom arguments for LocalManager in QCGPJExecutor
+       * fixed dependencies of zmq package
+       * improved script element handling of in various parallel modes
+       * changed the method of gathering available CPU identifiers
+       * a range of minor improvements
+       * fixed bug undefined variable
+       * fixed typo in service arguments
+       * changed the method of gathering available CPU identifiers
+
+Version 0.13.1   2022-06-17 Piotr Kopta <pkopta@man.poznan.pl>, Laurens Veen
+<L.E.Veen@uva.nl>
+       * additonal environment variables for launching srun jobs from inside a pilot job parallel task
+       * bugfix related to support for different argument names between Slurm versions
+       * bugfix related to race condition in wait4all method
+       * reporting version in debug logs
+       * support for tests with different Slurm versions
+       * updated documentation for tests
+       * bugfixes within the testing scripts
+
+Version 0.13.0   2022-01-21 Piotr Kopta <pkopta@man.poznan.pl>
+       * minimisation of the srun command usage
+       * the basic mechanism that allowed to start QCG-PilotJob agents only with srun has been generalised and allows to select different mechanisms, e.g. ssh
+       * Pub/Sub task status queries
+       * provided an asynchronous notification mechanism on a level of QCG-PilotJob manager so the client (via API) can trace the task status changes without periodic querying the service
+       * experimental implementation of a global queue mechanism (currently available in a globalqueue branch)
+       * resource parsing in the partition mode
+       * launching agents via ssh protocol
+       * proper handling of application arguments in the intelmpi model
+       * fixed small issues
+
+Version 0.12.3   2021-09-24 Piotr Kopta <pkopta@man.poznan.pl>
+       * support for the enumeration values in iterative tasks: iteration element can take a list of enumeration values as an input parameter
+       * documentation update: added FAQ section
+
+Version 0.12.2   2021-06-20 Piotr Kopta <pkopta@man.poznan.pl>
+       * bug fix related to running inside Jupyter Notebooks
+
+Version 0.12.1   2021-06-16 Piotr Kopta <pkopta@man.poznan.pl>, Bartosz Bosak <bbosak@man.poznan.pl>
+       * initial implementation of executor-like interface
+       * breakdown of the toolkit into components (core, cmds and executor-api)
+       * changed organisation of the repository (namespaces)
+       * optimisation in starting node agents
+       * updated documentation
+       * bug fixes
+
 Version 0.11.2   2021-04-30 Piotr Kopta <pkopta@man.poznan.pl>
 	* bugfixes related to the ZMQ communication between service and agents
 	* improved wrapper
@@ -57,7 +110,6 @@ Version 0.4   2019-06-10 Bartosz Bosak <bbosak@man.poznan.pl>
 	* the testing mode of execution which allows to define virtual
 	resources and may be useful e.g. for tests performed on users'
 	laptops.
-
 
 Version 0.2   2018-03-14 Piotr Kopta <pkopta@man.poznan.pl>
 	* new variable in job's execution environemnt QCG_PM_ZMQ_ADDRESS with
